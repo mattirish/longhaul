@@ -88,6 +88,7 @@ class FreeDataAdapter:
     cmd_port: int = 9000
     data_port: int = 9001
     bandwidth: int = 2300
+    session_mode: str = "auto"
 
     CONFIG_FILE = "freedata-config.json"
 
@@ -113,6 +114,7 @@ class FreeDataAdapter:
                     "cmd_port": self.cmd_port,
                     "data_port": self.data_port,
                     "bandwidth": self.bandwidth,
+                    "session_mode": self.session_mode,
                 },
                 indent=2,
             )
@@ -128,6 +130,7 @@ class FreeDataAdapter:
             mycall=self.station_id,
             peer_call=self.peer_id,
             bandwidth=self.bandwidth,
+            session_mode=self.session_mode,
         )
 
     def send(self, envelope: MessageEnvelope) -> Path:
@@ -137,8 +140,12 @@ class FreeDataAdapter:
             envelope,
         )
         payload = json.dumps(asdict(envelope), separators=(",", ":")).encode()
-        command_client = FreeDataCommandClient(self.socket_config)
         data_client = FreeDataDataClient(self.socket_config)
+        if self.session_mode == "data-only":
+            data_client.send(payload)
+            return path
+
+        command_client = FreeDataCommandClient(self.socket_config)
         version = command_client.version()
         if not any("VERSION FREEDATA" in line for line in version):
             raise RuntimeError("FreeDATA daemon did not report VERSION FREEDATA")
@@ -177,6 +184,7 @@ def freedata_adapter(
     cmd_port: int = 9000,
     data_port: int = 9001,
     bandwidth: int = 2300,
+    session_mode: str = "auto",
 ) -> FreeDataAdapter:
     return FreeDataAdapter(
         root=root,
@@ -187,6 +195,7 @@ def freedata_adapter(
         cmd_port=cmd_port,
         data_port=data_port,
         bandwidth=bandwidth,
+        session_mode=session_mode,
     )
 
 

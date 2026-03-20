@@ -12,6 +12,7 @@ class FreeDataSocketConfig:
     mycall: str = "N0CALL"
     peer_call: str = "N0CALL"
     bandwidth: int = 2300
+    session_mode: str = "auto"
     command_timeout_s: float = 5.0
     data_timeout_s: float = 10.0
 

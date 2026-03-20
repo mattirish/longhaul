@@ -178,6 +178,8 @@ Purpose:
 
 - send a prepared protocol message through either the spool transport or the FreeDATA adapter
 
+For `--transport freedata`, use `--session-mode data-only` for local testmode daemon work when you want to validate data-socket delivery without triggering the FreeDATA connection state machine.
+
 ### `longhaul receive`
 
 Receiver-side transfer commands.

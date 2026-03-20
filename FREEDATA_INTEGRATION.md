@@ -21,6 +21,11 @@ Longhaul uses the data socket for:
 
 - opaque Longhaul message envelope bytes
 
+Longhaul now supports two FreeDATA session modes:
+
+- `auto`: issue `VERSION`, `MYCALL`, `BW`, `CONNECT`, send data, then `DISCONNECT`
+- `data-only`: send envelope bytes directly to the FreeDATA data socket without invoking the connection state machine
+
 ## What Was Validated
 
 The following was validated locally in this repository:
@@ -59,6 +64,8 @@ The remaining limitation is narrower:
 - a socket-interface `CONNECT` in test mode still does not complete a real modem-backed peer session
 - asynchronous `CONNECT` / `DISCONNECT` responses can race with the short-lived Longhaul command client
 - the daemon remains up, but a full peer session is still not established in this local no-RF mode
+
+For local development, `data-only` is currently the recommended mode because it validates Longhaul envelope delivery into the live FreeDATA daemon without dragging in the unstable local peer-session path.
 
 ## Apple Silicon Note
 
@@ -114,7 +121,8 @@ PYTHONPATH=src python3 -m longhaul.cli transport dispatch \
   --peer-id K0PEER \
   --host 127.0.0.1 \
   --cmd-port 9100 \
-  --data-port 9101
+  --data-port 9101 \
+  --session-mode data-only
 ```
 
 ## Next Work
