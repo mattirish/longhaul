@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .advertise import build_advertisement
-from .artifact import DEFAULT_SEGMENT_SIZE, plan_artifact
+from .artifact import DEFAULT_SEGMENT_SIZE, apply_artifact, plan_artifact, verify_artifact
 from .git import GitError, current_head, ensure_repo, refs
 from .metadata import init_repo_config, load_receive_state, load_repo_config
 
@@ -77,6 +77,33 @@ def plan_artifact_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def receive_verify_command(args: argparse.Namespace) -> int:
+    verification = verify_artifact(Path(args.artifact_dir).resolve())
+    print(json.dumps(verification.__dict__, indent=2))
+    return 0
+
+
+def receive_apply_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    config = load_repo_config(repo_path)
+    manifest = apply_artifact(
+        repo_path,
+        Path(args.artifact_dir).resolve(),
+        expected_repo_id=config.repo_id,
+        expected_node_id=config.node_id,
+    )
+    output = {
+        "artifact_id": manifest.artifact_id,
+        "repo_id": manifest.repo_id,
+        "target_ref": manifest.target_ref,
+        "target_commit": manifest.target_commit,
+        "receiver_node_id": manifest.receiver_node_id,
+    }
+    print(json.dumps(output, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="longhaul")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -110,6 +137,18 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_parser.add_argument("--baseline-ref")
     artifact_parser.add_argument("--segment-size", type=int, default=DEFAULT_SEGMENT_SIZE)
     artifact_parser.set_defaults(func=plan_artifact_command)
+
+    receive_parser = subparsers.add_parser("receive")
+    receive_subparsers = receive_parser.add_subparsers(dest="receive_command", required=True)
+
+    verify_parser = receive_subparsers.add_parser("verify")
+    verify_parser.add_argument("--artifact-dir", required=True)
+    verify_parser.set_defaults(func=receive_verify_command)
+
+    apply_parser = receive_subparsers.add_parser("apply")
+    apply_parser.add_argument("--repo", default=".")
+    apply_parser.add_argument("--artifact-dir", required=True)
+    apply_parser.set_defaults(func=receive_apply_command)
 
     return parser
 

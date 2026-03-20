@@ -49,6 +49,20 @@ def rev_parse(repo_path: Path, ref: str) -> str:
     return run_git(repo_path, "rev-parse", ref)
 
 
+def rev_parse_optional(repo_path: Path, ref: str) -> str | None:
+    try:
+        return rev_parse(repo_path, ref)
+    except GitError:
+        return None
+
+
+def canonical_ref(repo_path: Path, ref: str) -> str:
+    try:
+        return run_git(repo_path, "symbolic-ref", "-q", ref)
+    except GitError:
+        return ref
+
+
 def object_closure(repo_path: Path, target: str, baseline: str | None = None) -> list[str]:
     args = ["rev-list", "--objects", target]
     if baseline:
@@ -82,3 +96,35 @@ def pack_objects(repo_path: Path, object_ids: list[str], output_path: Path) -> N
         stdout = result.stdout.decode(errors="replace").strip()
         raise GitError(stderr or stdout or "git pack-objects failed")
     output_path.write_bytes(result.stdout)
+
+
+def unpack_objects(repo_path: Path, pack_path: Path) -> None:
+    result = subprocess.run(
+        ["git", "unpack-objects"],
+        cwd=repo_path,
+        input=pack_path.read_bytes(),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip()
+        stdout = result.stdout.decode(errors="replace").strip()
+        raise GitError(stderr or stdout or "git unpack-objects failed")
+
+
+def object_exists(repo_path: Path, object_id: str, kind: str | None = None) -> bool:
+    spec = f"{object_id}^{{{kind}}}" if kind else object_id
+    result = subprocess.run(
+        ["git", "cat-file", "-e", spec],
+        cwd=repo_path,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def update_ref(repo_path: Path, ref: str, new_value: str, old_value: str | None = None) -> None:
+    args = ["update-ref", ref, new_value]
+    if old_value is not None:
+        args.append(old_value)
+    run_git(repo_path, *args)

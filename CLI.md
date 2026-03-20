@@ -125,34 +125,20 @@ Receiver-side transfer commands.
 Initial commands:
 
 - `longhaul receive offer`
-- `longhaul receive segment`
-- `longhaul receive complete`
+- `longhaul receive verify`
 - `longhaul receive apply`
 
-#### `longhaul receive offer`
+#### `longhaul receive verify`
 
 Purpose:
 
-- validate and stage an offered artifact for receipt
-
-#### `longhaul receive segment`
-
-Purpose:
-
-- accept, verify, and persist a segment
+- verify an artifact on disk against its manifest
 
 Expected behavior:
 
-- reject malformed segment metadata
-- ignore valid duplicates
-- record missing ranges for later reporting
-
-#### `longhaul receive complete`
-
-Purpose:
-
-- verify whether all required segments are present
-- compute whole-artifact verification state
+- verify payload size and whole-payload hash
+- recompute segment hashes
+- reject artifacts whose manifest and payload do not match
 
 #### `longhaul receive apply`
 
@@ -160,6 +146,7 @@ Purpose:
 
 - import a fully verified artifact into the local Git repository
 - update the target ref only after successful import
+- reject apply when the local baseline does not match the artifact baseline
 
 ### `longhaul transport`
 
