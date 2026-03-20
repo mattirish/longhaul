@@ -82,6 +82,16 @@ It should not be thought of as:
 - delivering software changes to a distant Linux machine over intermittent radio links
 - exchanging low-churn text-heavy data between known endpoints where airtime dominates every other cost
 
+## Current Transport Status
+
+Longhaul now has:
+
+- a file-backed spool transport for local protocol testing
+- a vendored [FreeDATA submodule](/Users/mattirish_1/projects/ham/rfsync/vendor/FreeDATA)
+- an initial FreeDATA socket adapter aimed at FreeDATA's command/data socket interface
+
+The FreeDATA adapter is intentionally early. It mirrors all emitted messages locally and targets the daemon socket interface, but it has not yet been validated against a live on-air session in this repository.
+
 ## Non-Goals For V1
 
 - arbitrary local working tree reconciliation

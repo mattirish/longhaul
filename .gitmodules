@@ -1,0 +1,3 @@
+[submodule "vendor/FreeDATA"]
+	path = vendor/FreeDATA
+	url = https://github.com/DJ2LS/FreeDATA.git

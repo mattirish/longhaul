@@ -31,7 +31,16 @@ from .messages import (
     read_envelope,
 )
 from .metadata import init_repo_config, load_repo_config
-from .transport import export_message, import_message, list_messages, read_messages
+from .transport import (
+    export_message,
+    freedata_adapter,
+    import_message,
+    list_messages,
+    read_messages,
+    serialize_transport_messages,
+    spool_adapter,
+    summarize_messages,
+)
 
 
 def repo_init(args: argparse.Namespace) -> int:
@@ -190,22 +199,154 @@ def transport_import_command(args: argparse.Namespace) -> int:
 
 
 def transport_list_command(args: argparse.Namespace) -> int:
-    messages = []
-    for path in list_messages(Path(args.spool).resolve(), args.box):
-        envelope = read_envelope(path)
-        messages.append(
-            {
-                "path": str(path),
-                "message_id": envelope.message_id,
-                "message_type": envelope.message_type,
-            }
-        )
-    print(json.dumps(messages, indent=2))
+    messages = summarize_messages(list_messages(Path(args.spool).resolve(), args.box))
+    print(json.dumps(serialize_transport_messages(messages), indent=2))
     return 0
 
 
 def transport_read_command(args: argparse.Namespace) -> int:
     print(json.dumps([asdict(envelope) for envelope in read_messages(Path(args.spool).resolve(), args.box)], indent=2))
+    return 0
+
+
+def transport_init_command(args: argparse.Namespace) -> int:
+    if args.transport == "spool":
+        adapter = spool_adapter(Path(args.root).resolve())
+        adapter.ensure()
+        output = {
+            "transport": "spool",
+            "root": str(adapter.root),
+            "incoming_dir": str(adapter.incoming_dir),
+            "outgoing_dir": str(adapter.outgoing_dir),
+        }
+    else:
+        if not args.station_id or not args.peer_id:
+            raise ValueError("freedata transport requires --station-id and --peer-id")
+        adapter = freedata_adapter(
+            Path(args.root).resolve(),
+            station_id=args.station_id,
+            peer_id=args.peer_id,
+            api_url=args.api_url,
+            host=args.host,
+            cmd_port=args.cmd_port,
+            data_port=args.data_port,
+            bandwidth=args.bandwidth,
+        )
+        adapter.ensure()
+        output = {
+            "transport": "freedata",
+            "root": str(adapter.root),
+            "config_path": str(adapter.config_path),
+            "mirror_incoming_dir": str(adapter.mirror.incoming_dir),
+            "mirror_outgoing_dir": str(adapter.mirror.outgoing_dir),
+            "host": args.host,
+            "cmd_port": args.cmd_port,
+            "data_port": args.data_port,
+            "bandwidth": args.bandwidth,
+        }
+    print(json.dumps(output, indent=2))
+    return 0
+
+
+def transport_status_command(args: argparse.Namespace) -> int:
+    root = Path(args.root).resolve()
+    if args.transport == "spool":
+        adapter = spool_adapter(root)
+        adapter.ensure()
+        output = {
+            "transport": "spool",
+            "root": str(adapter.root),
+            "incoming_count": len(adapter.list("incoming")),
+            "outgoing_count": len(adapter.list("outgoing")),
+        }
+    else:
+        adapter = freedata_adapter(
+            root,
+            station_id=args.station_id or "unknown",
+            peer_id=args.peer_id or "unknown",
+            api_url=args.api_url,
+            host=args.host,
+            cmd_port=args.cmd_port,
+            data_port=args.data_port,
+            bandwidth=args.bandwidth,
+        )
+        adapter.ensure()
+        output = {
+            "transport": "freedata",
+            "root": str(adapter.root),
+            "config_path": str(adapter.config_path),
+            "mirror_incoming_count": len(adapter.list("incoming")),
+            "mirror_outgoing_count": len(adapter.list("outgoing")),
+            "host": args.host,
+            "cmd_port": args.cmd_port,
+            "data_port": args.data_port,
+            "bandwidth": args.bandwidth,
+        }
+    print(json.dumps(output, indent=2))
+    return 0
+
+
+def transport_probe_command(args: argparse.Namespace) -> int:
+    if args.transport != "freedata":
+        raise ValueError("probe is only implemented for the freedata transport")
+    adapter = freedata_adapter(
+        Path(args.root).resolve(),
+        station_id=args.station_id,
+        peer_id=args.peer_id,
+        api_url=args.api_url,
+        host=args.host,
+        cmd_port=args.cmd_port,
+        data_port=args.data_port,
+        bandwidth=args.bandwidth,
+    )
+    adapter.ensure()
+    version = adapter.socket_config
+    from .freedata import FreeDataCommandClient
+
+    responses = FreeDataCommandClient(version).version()
+    print(
+        json.dumps(
+            {
+                "transport": "freedata",
+                "host": args.host,
+                "cmd_port": args.cmd_port,
+                "responses": responses,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def transport_dispatch_command(args: argparse.Namespace) -> int:
+    message = read_envelope(Path(args.message).resolve())
+    if args.transport == "spool":
+        path = export_message(Path(args.root).resolve(), message)
+        print(json.dumps({"transport": "spool", "dispatched_path": str(path)}, indent=2))
+        return 0
+
+    adapter = freedata_adapter(
+        Path(args.root).resolve(),
+        station_id=args.station_id,
+        peer_id=args.peer_id,
+        api_url=args.api_url,
+        host=args.host,
+        cmd_port=args.cmd_port,
+        data_port=args.data_port,
+        bandwidth=args.bandwidth,
+    )
+    path = adapter.send(message)
+    print(
+        json.dumps(
+            {
+                "transport": "freedata",
+                "mirror_path": str(path),
+                "message_id": message.message_id,
+                "message_type": message.message_type,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -401,6 +542,30 @@ def build_parser() -> argparse.ArgumentParser:
     transport_parser = subparsers.add_parser("transport")
     transport_subparsers = transport_parser.add_subparsers(dest="transport_command", required=True)
 
+    transport_init_parser = transport_subparsers.add_parser("init")
+    transport_init_parser.add_argument("--transport", choices=["spool", "freedata"], default="spool")
+    transport_init_parser.add_argument("--root", required=True)
+    transport_init_parser.add_argument("--station-id")
+    transport_init_parser.add_argument("--peer-id")
+    transport_init_parser.add_argument("--api-url")
+    transport_init_parser.add_argument("--host", default="127.0.0.1")
+    transport_init_parser.add_argument("--cmd-port", type=int, default=9000)
+    transport_init_parser.add_argument("--data-port", type=int, default=9001)
+    transport_init_parser.add_argument("--bandwidth", type=int, default=2300)
+    transport_init_parser.set_defaults(func=transport_init_command)
+
+    transport_status_parser = transport_subparsers.add_parser("status")
+    transport_status_parser.add_argument("--transport", choices=["spool", "freedata"], default="spool")
+    transport_status_parser.add_argument("--root", required=True)
+    transport_status_parser.add_argument("--station-id")
+    transport_status_parser.add_argument("--peer-id")
+    transport_status_parser.add_argument("--api-url")
+    transport_status_parser.add_argument("--host", default="127.0.0.1")
+    transport_status_parser.add_argument("--cmd-port", type=int, default=9000)
+    transport_status_parser.add_argument("--data-port", type=int, default=9001)
+    transport_status_parser.add_argument("--bandwidth", type=int, default=2300)
+    transport_status_parser.set_defaults(func=transport_status_command)
+
     transport_import_parser = transport_subparsers.add_parser("import")
     transport_import_parser.add_argument("--spool", required=True)
     transport_import_parser.add_argument("--message", required=True)
@@ -415,6 +580,31 @@ def build_parser() -> argparse.ArgumentParser:
     transport_read_parser.add_argument("--spool", required=True)
     transport_read_parser.add_argument("--box", choices=["incoming", "outgoing"], default="incoming")
     transport_read_parser.set_defaults(func=transport_read_command)
+
+    transport_probe_parser = transport_subparsers.add_parser("probe")
+    transport_probe_parser.add_argument("--transport", choices=["freedata"], default="freedata")
+    transport_probe_parser.add_argument("--root", required=True)
+    transport_probe_parser.add_argument("--station-id", required=True)
+    transport_probe_parser.add_argument("--peer-id", required=True)
+    transport_probe_parser.add_argument("--api-url")
+    transport_probe_parser.add_argument("--host", default="127.0.0.1")
+    transport_probe_parser.add_argument("--cmd-port", type=int, default=9000)
+    transport_probe_parser.add_argument("--data-port", type=int, default=9001)
+    transport_probe_parser.add_argument("--bandwidth", type=int, default=2300)
+    transport_probe_parser.set_defaults(func=transport_probe_command)
+
+    transport_dispatch_parser = transport_subparsers.add_parser("dispatch")
+    transport_dispatch_parser.add_argument("--transport", choices=["spool", "freedata"], default="spool")
+    transport_dispatch_parser.add_argument("--root", required=True)
+    transport_dispatch_parser.add_argument("--message", required=True)
+    transport_dispatch_parser.add_argument("--station-id")
+    transport_dispatch_parser.add_argument("--peer-id")
+    transport_dispatch_parser.add_argument("--api-url")
+    transport_dispatch_parser.add_argument("--host", default="127.0.0.1")
+    transport_dispatch_parser.add_argument("--cmd-port", type=int, default=9000)
+    transport_dispatch_parser.add_argument("--data-port", type=int, default=9001)
+    transport_dispatch_parser.add_argument("--bandwidth", type=int, default=2300)
+    transport_dispatch_parser.set_defaults(func=transport_dispatch_command)
 
     return parser
 

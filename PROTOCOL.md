@@ -187,6 +187,15 @@ Each message is a JSON envelope containing:
 
 This is not the final on-air framing. It is a development transport that forces the protocol boundary to remain explicit while keeping message contents inspectable during implementation.
 
+## FreeDATA Transport Direction
+
+The initial radio-facing adapter targets FreeDATA's socket interface:
+
+- a command socket for control commands such as `VERSION`, `MYCALL`, `BW`, and `CONNECT`
+- a data socket for payload bytes
+
+In the current implementation, Longhaul serializes a protocol envelope to JSON bytes and hands that opaque payload to the FreeDATA data socket after basic command-socket setup. This preserves the Longhaul message model while leaving room for later optimization of on-air framing and session handling.
+
 ## Resume Semantics
 
 Resume is mandatory in v1.

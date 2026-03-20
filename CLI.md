@@ -127,9 +127,26 @@ File-backed mock transport commands.
 
 Initial commands:
 
+- `longhaul transport init`
+- `longhaul transport status`
 - `longhaul transport import`
 - `longhaul transport list`
 - `longhaul transport read`
+- `longhaul transport probe`
+- `longhaul transport dispatch`
+
+#### `longhaul transport init`
+
+Purpose:
+
+- initialize a transport root for either the spool transport or the FreeDATA adapter
+- persist FreeDATA socket settings for later use
+
+#### `longhaul transport status`
+
+Purpose:
+
+- inspect transport-local state such as spool counts or FreeDATA mirror/config paths
 
 #### `longhaul transport import`
 
@@ -148,6 +165,18 @@ Purpose:
 Purpose:
 
 - inspect full decoded protocol envelopes from a spool inbox or outbox
+
+#### `longhaul transport probe`
+
+Purpose:
+
+- test connectivity to the FreeDATA command socket by issuing a version query
+
+#### `longhaul transport dispatch`
+
+Purpose:
+
+- send a prepared protocol message through either the spool transport or the FreeDATA adapter
 
 ### `longhaul receive`
 

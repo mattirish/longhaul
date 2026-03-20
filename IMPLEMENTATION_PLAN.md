@@ -91,11 +91,13 @@ Deliverables:
 - transport adapter abstraction
 - first concrete adapter for the initial radio stack
 - operational settings for segment sizing and pacing
+- local config and probe workflow for the initial radio stack
 
 Acceptance criteria:
 
 - same artifact and protocol implementation works over the real transport
 - radio integration does not change repository or artifact semantics
+- the repository contains a concrete integration target rather than a placeholder transport name
 
 ## Data Model Sketch
 
