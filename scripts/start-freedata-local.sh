@@ -18,13 +18,14 @@ p = ConfigParser()
 p.read(path)
 p["NETWORK"]["modemaddress"] = "$HOST"
 p["NETWORK"]["modemport"] = "$API_PORT"
-p["STATION"]["mycall"] = "XX1XXX"
+p["STATION"]["mycall"] = "N0CALL"
 p["GUI"]["auto_run_browser"] = "False"
 p["SOCKET_INTERFACE"]["enable"] = "True"
 p["SOCKET_INTERFACE"]["host"] = "$HOST"
 p["SOCKET_INTERFACE"]["cmd_port"] = "$CMD_PORT"
 p["SOCKET_INTERFACE"]["data_port"] = "$DATA_PORT"
 p["RADIO"]["control"] = "disabled"
+p["EXP"]["enable_testmode"] = "True"
 with open(path, "w") as handle:
     p.write(handle)
 print(path)

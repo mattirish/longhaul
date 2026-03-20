@@ -46,14 +46,19 @@ It is not enough for:
 - a real FreeDATA P2P session
 - modem-backed payload transfer
 
-Observed behavior:
+That original blocker has now been reduced.
 
-- `CONNECT` creates a `P2PConnection`
-- FreeDATA then attempts to transmit through `ctx.rf_modem`
-- because the modem did not start, `ctx.rf_modem` is `None`
-- the daemon throws an exception in the connection flow
+Longhaul patches the vendored FreeDATA submodule to expose `EXP.enable_testmode` as a real runtime option. In that mode:
 
-This is a FreeDATA runtime/bootstrap issue for local development, not a Longhaul envelope-format issue.
+- FreeDATA starts `rf_modem` without initializing live audio hardware
+- the socket interface starts normally
+- the earlier `ctx.rf_modem is None` crash in the `CONNECT` path is avoided
+
+The remaining limitation is narrower:
+
+- a socket-interface `CONNECT` in test mode still does not complete a real modem-backed peer session
+- asynchronous `CONNECT` / `DISCONNECT` responses can race with the short-lived Longhaul command client
+- the daemon remains up, but a full peer session is still not established in this local no-RF mode
 
 ## Apple Silicon Note
 
@@ -116,6 +121,6 @@ PYTHONPATH=src python3 -m longhaul.cli transport dispatch \
 
 The next meaningful integration steps are:
 
-- create a repeatable local FreeDATA config or startup path that keeps the socket interface up without crashing the connection flow
-- determine whether FreeDATA has a supported test mode or dummy modem path that still permits `CONNECT` and payload movement
+- reduce command-socket response races by deciding whether Longhaul should keep a longer-lived FreeDATA command session or support an externally managed session mode
+- determine whether FreeDATA test mode can be extended to complete a local peer session without live RF
 - validate Longhaul transfer over a real modem-backed FreeDATA session once the daemon bootstrap is stable
