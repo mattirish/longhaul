@@ -105,3 +105,4 @@ The FreeDATA adapter is intentionally early. It mirrors all emitted messages loc
 
 - [ARCHITECTURE.md](/Users/mattirish_1/projects/ham/rfsync/ARCHITECTURE.md)
 - [PROTOCOL.md](/Users/mattirish_1/projects/ham/rfsync/PROTOCOL.md)
+- [FREEDATA_INTEGRATION.md](/Users/mattirish_1/projects/ham/rfsync/FREEDATA_INTEGRATION.md)
