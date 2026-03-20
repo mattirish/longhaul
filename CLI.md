@@ -98,25 +98,19 @@ Transport-oriented sender commands.
 
 Initial commands:
 
-- `longhaul send offer`
-- `longhaul send segments`
+- `longhaul send segment`
 
-#### `longhaul send offer`
-
-Purpose:
-
-- emit an `OFFER` message for an artifact
-
-#### `longhaul send segments`
+#### `longhaul send segment`
 
 Purpose:
 
-- emit requested or all artifact segments for a given artifact
+- export one artifact segment in a transportable envelope for local testing
 
 Expected inputs:
 
 - artifact directory
-- optional requested segment ranges
+- segment index
+- output path
 
 ### `longhaul receive`
 
@@ -125,14 +119,54 @@ Receiver-side transfer commands.
 Initial commands:
 
 - `longhaul receive offer`
+- `longhaul receive segment`
+- `longhaul receive complete`
 - `longhaul receive verify`
 - `longhaul receive apply`
+
+#### `longhaul receive offer`
+
+Purpose:
+
+- stage an artifact manifest for receipt
+- initialize persistent receive state under `.longhaul/`
+
+Expected behavior:
+
+- validate repository and receiver identity
+- create durable state for later resume
+- report missing ranges immediately
+
+#### `longhaul receive segment`
+
+Purpose:
+
+- accept one segment for a staged artifact
+
+Expected behavior:
+
+- verify length and segment hash before persistence
+- store the segment durably
+- update missing-range state without requiring per-segment ACK chatter
+
+#### `longhaul receive complete`
+
+Purpose:
+
+- assemble a staged payload from received segments
+- verify the assembled payload against the manifest
+
+Expected behavior:
+
+- reject incomplete artifacts
+- verify per-segment integrity again during assembly
+- mark the payload as verified only after whole-payload validation passes
 
 #### `longhaul receive verify`
 
 Purpose:
 
-- verify an artifact on disk against its manifest
+- verify a fully assembled artifact directory against its manifest
 
 Expected behavior:
 

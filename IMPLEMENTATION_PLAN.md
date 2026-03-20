@@ -60,12 +60,14 @@ Deliverables:
 - persistent receive state
 - missing-range reporting
 - duplicate segment handling
+- staged payload assembly before apply
 
 Acceptance criteria:
 
 - interrupted transfer can resume without replaying verified segments
 - receiver can identify exactly which segments remain missing
 - retransmission is limited to missing ranges
+- repository refs remain unchanged until staged payload assembly and verification succeed
 
 ## Phase 5: File-Backed Mock Transport
 

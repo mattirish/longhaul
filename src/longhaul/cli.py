@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 import sys
 from pathlib import Path
 
-from .advertise import build_advertisement
-from .artifact import DEFAULT_SEGMENT_SIZE, apply_artifact, plan_artifact, verify_artifact
+from .advertise import build_advertisement, incomplete_artifacts
+from .artifact import (
+    DEFAULT_SEGMENT_SIZE,
+    apply_artifact,
+    apply_staged_artifact,
+    assemble_staged_artifact,
+    export_segment,
+    ingest_segment,
+    plan_artifact,
+    stage_artifact,
+    verify_artifact,
+)
 from .git import GitError, current_head, ensure_repo, refs
-from .metadata import init_repo_config, load_receive_state, load_repo_config
+from .metadata import init_repo_config, load_repo_config
 
 
 def repo_init(args: argparse.Namespace) -> int:
@@ -33,7 +44,7 @@ def repo_status(args: argparse.Namespace) -> int:
         "node_id": config.node_id,
         "head": current_head(repo_path),
         "refs": refs(repo_path),
-        "incomplete_artifacts": load_receive_state(repo_path),
+        "incomplete_artifacts": incomplete_artifacts(repo_path),
     }
     print(json.dumps(data, indent=2))
     return 0
@@ -79,7 +90,7 @@ def plan_artifact_command(args: argparse.Namespace) -> int:
 
 def receive_verify_command(args: argparse.Namespace) -> int:
     verification = verify_artifact(Path(args.artifact_dir).resolve())
-    print(json.dumps(verification.__dict__, indent=2))
+    print(json.dumps(asdict(verification), indent=2))
     return 0
 
 
@@ -87,12 +98,20 @@ def receive_apply_command(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo).resolve()
     ensure_repo(repo_path)
     config = load_repo_config(repo_path)
-    manifest = apply_artifact(
-        repo_path,
-        Path(args.artifact_dir).resolve(),
-        expected_repo_id=config.repo_id,
-        expected_node_id=config.node_id,
-    )
+    if args.artifact_id:
+        manifest = apply_staged_artifact(
+            repo_path,
+            args.artifact_id,
+            expected_repo_id=config.repo_id,
+            expected_node_id=config.node_id,
+        )
+    else:
+        manifest = apply_artifact(
+            repo_path,
+            Path(args.artifact_dir).resolve(),
+            expected_repo_id=config.repo_id,
+            expected_node_id=config.node_id,
+        )
     output = {
         "artifact_id": manifest.artifact_id,
         "repo_id": manifest.repo_id,
@@ -101,6 +120,50 @@ def receive_apply_command(args: argparse.Namespace) -> int:
         "receiver_node_id": manifest.receiver_node_id,
     }
     print(json.dumps(output, indent=2))
+    return 0
+
+
+def send_segment_command(args: argparse.Namespace) -> int:
+    output_path = export_segment(
+        Path(args.artifact_dir).resolve(),
+        args.index,
+        Path(args.output).resolve(),
+    )
+    print(json.dumps({"segment_path": str(output_path), "index": args.index}, indent=2))
+    return 0
+
+
+def receive_offer_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    config = load_repo_config(repo_path)
+    progress = stage_artifact(
+        repo_path,
+        Path(args.manifest).resolve(),
+        expected_repo_id=config.repo_id,
+        expected_node_id=config.node_id,
+    )
+    print(json.dumps(asdict(progress), indent=2))
+    return 0
+
+
+def receive_segment_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    progress = ingest_segment(
+        repo_path,
+        args.artifact_id,
+        Path(args.segment).resolve(),
+    )
+    print(json.dumps(asdict(progress), indent=2))
+    return 0
+
+
+def receive_complete_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    verification = assemble_staged_artifact(repo_path, args.artifact_id)
+    print(json.dumps(asdict(verification), indent=2))
     return 0
 
 
@@ -138,8 +201,33 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_parser.add_argument("--segment-size", type=int, default=DEFAULT_SEGMENT_SIZE)
     artifact_parser.set_defaults(func=plan_artifact_command)
 
+    send_parser = subparsers.add_parser("send")
+    send_subparsers = send_parser.add_subparsers(dest="send_command", required=True)
+
+    send_segment_parser = send_subparsers.add_parser("segment")
+    send_segment_parser.add_argument("--artifact-dir", required=True)
+    send_segment_parser.add_argument("--index", type=int, required=True)
+    send_segment_parser.add_argument("--output", required=True)
+    send_segment_parser.set_defaults(func=send_segment_command)
+
     receive_parser = subparsers.add_parser("receive")
     receive_subparsers = receive_parser.add_subparsers(dest="receive_command", required=True)
+
+    offer_parser = receive_subparsers.add_parser("offer")
+    offer_parser.add_argument("--repo", default=".")
+    offer_parser.add_argument("--manifest", required=True)
+    offer_parser.set_defaults(func=receive_offer_command)
+
+    segment_parser = receive_subparsers.add_parser("segment")
+    segment_parser.add_argument("--repo", default=".")
+    segment_parser.add_argument("--artifact-id", required=True)
+    segment_parser.add_argument("--segment", required=True)
+    segment_parser.set_defaults(func=receive_segment_command)
+
+    complete_parser = receive_subparsers.add_parser("complete")
+    complete_parser.add_argument("--repo", default=".")
+    complete_parser.add_argument("--artifact-id", required=True)
+    complete_parser.set_defaults(func=receive_complete_command)
 
     verify_parser = receive_subparsers.add_parser("verify")
     verify_parser.add_argument("--artifact-dir", required=True)
@@ -147,7 +235,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     apply_parser = receive_subparsers.add_parser("apply")
     apply_parser.add_argument("--repo", default=".")
-    apply_parser.add_argument("--artifact-dir", required=True)
+    apply_group = apply_parser.add_mutually_exclusive_group(required=True)
+    apply_group.add_argument("--artifact-dir")
+    apply_group.add_argument("--artifact-id")
     apply_parser.set_defaults(func=receive_apply_command)
 
     return parser
