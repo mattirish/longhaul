@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .freedata import FreeDataCommandClient, FreeDataDataClient, FreeDataSocketConfig
+from .freedata import FreeDataCommandClient, FreeDataDataClient, FreeDataSession, FreeDataSocketConfig
 from .messages import MessageEnvelope, read_envelope, write_envelope
 
 
@@ -142,14 +142,10 @@ class FreeDataAdapter:
         version = command_client.version()
         if not any("VERSION FREEDATA" in line for line in version):
             raise RuntimeError("FreeDATA daemon did not report VERSION FREEDATA")
-        command_client.connect()
-        try:
+        with FreeDataSession(self.socket_config) as session:
+            session.connect()
             data_client.send(payload)
-        finally:
-            try:
-                command_client.disconnect()
-            except OSError:
-                pass
+            session.disconnect()
         return path
 
     def ingest(self, path: Path) -> Path:
