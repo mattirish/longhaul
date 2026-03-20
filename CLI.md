@@ -98,19 +98,56 @@ Transport-oriented sender commands.
 
 Initial commands:
 
+- `longhaul send offer`
 - `longhaul send segment`
+
+#### `longhaul send offer`
+
+Purpose:
+
+- serialize an artifact offer as a protocol message
+- optionally place that message into a file-backed transport spool
 
 #### `longhaul send segment`
 
 Purpose:
 
-- export one artifact segment in a transportable envelope for local testing
+- export one artifact segment as a protocol message
+- optionally place that message into a file-backed transport spool
 
 Expected inputs:
 
 - artifact directory
 - segment index
 - output path
+
+### `longhaul transport`
+
+File-backed mock transport commands.
+
+Initial commands:
+
+- `longhaul transport import`
+- `longhaul transport list`
+- `longhaul transport read`
+
+#### `longhaul transport import`
+
+Purpose:
+
+- copy a protocol message into a local spool inbox
+
+#### `longhaul transport list`
+
+Purpose:
+
+- inspect message filenames and message types in a spool inbox or outbox
+
+#### `longhaul transport read`
+
+Purpose:
+
+- inspect full decoded protocol envelopes from a spool inbox or outbox
 
 ### `longhaul receive`
 
@@ -128,7 +165,7 @@ Initial commands:
 
 Purpose:
 
-- stage an artifact manifest for receipt
+- stage an offered artifact for receipt from either a manifest file or an `OFFER` message
 - initialize persistent receive state under `.longhaul/`
 
 Expected behavior:
@@ -141,7 +178,7 @@ Expected behavior:
 
 Purpose:
 
-- accept one segment for a staged artifact
+- accept one segment for a staged artifact from either a raw segment file or a `SEGMENT` message
 
 Expected behavior:
 
@@ -161,6 +198,7 @@ Expected behavior:
 - reject incomplete artifacts
 - verify per-segment integrity again during assembly
 - mark the payload as verified only after whole-payload validation passes
+- optionally emit a `COMPLETE` message into the local spool outbox
 
 #### `longhaul receive verify`
 
@@ -181,27 +219,26 @@ Purpose:
 - import a fully verified artifact into the local Git repository
 - update the target ref only after successful import
 - reject apply when the local baseline does not match the artifact baseline
+- optionally emit an `APPLY_RESULT` message into the local spool outbox
 
-### `longhaul transport`
+#### `longhaul receive nack`
 
-Transport adapter commands for early testing.
+Purpose:
 
-Initial commands:
-
-- `longhaul transport export`
-- `longhaul transport import`
-
-These commands support a file-based mock transport first so the protocol and artifact design can be tested without requiring radio integration.
+- emit a compact `NACK_RANGES` message for a staged incomplete artifact
 
 ## Suggested V1 Workflow
 
 1. receiver runs `longhaul repo advertise`
 2. sender runs `longhaul plan artifact`
-3. sender emits an offer and segments through a transport adapter
-4. receiver stages and stores verified segments
-5. receiver reports missing ranges
-6. sender retransmits only missing ranges
-7. receiver runs `longhaul receive apply`
+3. sender runs `longhaul send offer` and places the message in a transport spool
+4. receiver imports the `OFFER` message and runs `longhaul receive offer`
+5. sender emits `SEGMENT` messages through the transport spool
+6. receiver imports and processes segments with `longhaul receive segment`
+7. receiver emits `NACK_RANGES` if needed
+8. sender retransmits only missing ranges
+9. receiver runs `longhaul receive complete`
+10. receiver runs `longhaul receive apply`
 
 ## Deferred UX
 

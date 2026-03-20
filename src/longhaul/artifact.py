@@ -7,7 +7,6 @@ import uuid
 from base64 import b64decode, b64encode
 from dataclasses import asdict, dataclass
 from itertools import groupby
-import shutil
 from pathlib import Path
 
 from .git import canonical_ref, object_closure, object_exists, pack_objects, rev_parse, rev_parse_optional, unpack_objects, update_ref
@@ -125,6 +124,10 @@ def write_manifest(output_dir: Path, manifest: ArtifactManifest) -> Path:
 
 def load_manifest(path: Path) -> ArtifactManifest:
     data = json.loads(path.read_text())
+    return manifest_from_data(data)
+
+
+def manifest_from_data(data: dict) -> ArtifactManifest:
     if not isinstance(data, dict):
         raise ValueError("manifest must be a JSON object")
     segments = data.get("segments", [])
@@ -239,6 +242,16 @@ def export_segment(artifact_dir: Path, index: int, output_path: Path) -> Path:
 
 def stage_artifact(repo_path: Path, manifest_path: Path, *, expected_repo_id: str, expected_node_id: str) -> ReceiveProgress:
     manifest = load_manifest(manifest_path)
+    return stage_manifest(repo_path, manifest, expected_repo_id=expected_repo_id, expected_node_id=expected_node_id)
+
+
+def stage_manifest(
+    repo_path: Path,
+    manifest: ArtifactManifest,
+    *,
+    expected_repo_id: str,
+    expected_node_id: str,
+) -> ReceiveProgress:
     if manifest.repo_id != expected_repo_id:
         raise ValueError("artifact repo_id does not match local Longhaul repository ID")
     if manifest.receiver_node_id != expected_node_id:
@@ -247,7 +260,7 @@ def stage_artifact(repo_path: Path, manifest_path: Path, *, expected_repo_id: st
     artifact_dir = artifact_incoming_dir(repo_path, manifest.artifact_id)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_segment_dir(repo_path, manifest.artifact_id).mkdir(exist_ok=True)
-    shutil.copyfile(manifest_path, artifact_dir / "manifest.json")
+    write_manifest(artifact_dir, manifest)
 
     state = ReceiveArtifactState(
         artifact_id=manifest.artifact_id,

@@ -114,6 +114,7 @@ Fields:
 - segment size
 - segment count
 - whole-artifact hash
+- embedded manifest for the file-backed mock transport implementation
 
 ### `SEGMENT`
 
@@ -128,6 +129,8 @@ Fields:
 - segment hash
 - payload bytes
 
+In the file-backed mock transport, the payload bytes are serialized inside a JSON envelope using a transport-safe encoding.
+
 ### `NACK_RANGES`
 
 Purpose:
@@ -138,6 +141,7 @@ Fields:
 
 - artifact ID
 - missing segment ranges
+- optional received segment summary
 
 ### `COMPLETE`
 
@@ -163,6 +167,25 @@ Fields:
 - apply status
 - updated ref
 - resulting commit hash
+
+## File-Backed Mock Transport
+
+Phase 5 introduces a file-backed transport adapter so protocol behavior can be validated without modem integration.
+
+The file-backed transport model has:
+
+- a spool root
+- an `outgoing/` directory for emitted protocol envelopes
+- an `incoming/` directory for imported protocol envelopes
+
+Each message is a JSON envelope containing:
+
+- message ID
+- message type
+- protocol version
+- payload
+
+This is not the final on-air framing. It is a development transport that forces the protocol boundary to remain explicit while keeping message contents inspectable during implementation.
 
 ## Resume Semantics
 

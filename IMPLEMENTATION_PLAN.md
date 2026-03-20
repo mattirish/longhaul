@@ -76,11 +76,13 @@ Deliverables:
 - protocol message serialization
 - local export/import transport adapter
 - test harness for multi-session transfer
+- spool inbox/outbox inspection tools
 
 Acceptance criteria:
 
 - complete end-to-end update using only local files as transport
 - protocol messages remain transport-neutral
+- sender and receiver can exchange `OFFER`, `SEGMENT`, `NACK_RANGES`, `COMPLETE`, and `APPLY_RESULT` messages through the spool model
 
 ## Phase 6: Radio Transport Adapter
 

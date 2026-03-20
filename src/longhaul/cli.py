@@ -9,17 +9,29 @@ from pathlib import Path
 from .advertise import build_advertisement, incomplete_artifacts
 from .artifact import (
     DEFAULT_SEGMENT_SIZE,
+    ReceiveProgress,
     apply_artifact,
     apply_staged_artifact,
     assemble_staged_artifact,
     export_segment,
     ingest_segment,
     plan_artifact,
+    stage_manifest,
     stage_artifact,
     verify_artifact,
 )
 from .git import GitError, current_head, ensure_repo, refs
+from .messages import (
+    apply_result_payload,
+    complete_payload,
+    manifest_from_offer_payload,
+    nack_ranges_payload,
+    new_envelope,
+    offer_payload,
+    read_envelope,
+)
 from .metadata import init_repo_config, load_repo_config
+from .transport import export_message, import_message, list_messages, read_messages
 
 
 def repo_init(args: argparse.Namespace) -> int:
@@ -88,6 +100,12 @@ def plan_artifact_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def write_message_file(path: Path, payload: object) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+    return path
+
+
 def receive_verify_command(args: argparse.Namespace) -> int:
     verification = verify_artifact(Path(args.artifact_dir).resolve())
     print(json.dumps(asdict(verification), indent=2))
@@ -119,7 +137,75 @@ def receive_apply_command(args: argparse.Namespace) -> int:
         "target_commit": manifest.target_commit,
         "receiver_node_id": manifest.receiver_node_id,
     }
+    if args.spool:
+        output["spool_path"] = str(
+            export_message(
+                Path(args.spool).resolve(),
+                new_envelope(
+                    "APPLY_RESULT",
+                    apply_result_payload(
+                        artifact_id=manifest.artifact_id,
+                        repo_id=manifest.repo_id,
+                        target_ref=manifest.target_ref,
+                        target_commit=manifest.target_commit,
+                        receiver_node_id=manifest.receiver_node_id,
+                    ),
+                ),
+            )
+        )
     print(json.dumps(output, indent=2))
+    return 0
+
+
+def receive_nack_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    for artifact in incomplete_artifacts(repo_path):
+        if artifact["artifact_id"] != args.artifact_id:
+            continue
+        progress = ReceiveProgress(
+            artifact_id=artifact["artifact_id"],
+            received_segments=artifact["received_segments"],
+            missing_ranges=artifact["missing_ranges"],
+            payload_verified=artifact["payload_verified"],
+            applied=False,
+        )
+        envelope = new_envelope("NACK_RANGES", nack_ranges_payload(progress))
+        output = {"artifact_id": args.artifact_id}
+        if args.message:
+            output["message_path"] = str(write_message_file(Path(args.message).resolve(), asdict(envelope)))
+        if args.spool:
+            output["spool_path"] = str(export_message(Path(args.spool).resolve(), envelope))
+        if not args.message and not args.spool:
+            output["message"] = asdict(envelope)
+        print(json.dumps(output, indent=2))
+        return 0
+    raise FileNotFoundError(f"no incomplete artifact found for {args.artifact_id}")
+
+
+def transport_import_command(args: argparse.Namespace) -> int:
+    imported = import_message(Path(args.spool).resolve(), Path(args.message).resolve())
+    print(json.dumps({"imported_path": str(imported)}, indent=2))
+    return 0
+
+
+def transport_list_command(args: argparse.Namespace) -> int:
+    messages = []
+    for path in list_messages(Path(args.spool).resolve(), args.box):
+        envelope = read_envelope(path)
+        messages.append(
+            {
+                "path": str(path),
+                "message_id": envelope.message_id,
+                "message_type": envelope.message_type,
+            }
+        )
+    print(json.dumps(messages, indent=2))
+    return 0
+
+
+def transport_read_command(args: argparse.Namespace) -> int:
+    print(json.dumps([asdict(envelope) for envelope in read_messages(Path(args.spool).resolve(), args.box)], indent=2))
     return 0
 
 
@@ -129,7 +215,24 @@ def send_segment_command(args: argparse.Namespace) -> int:
         args.index,
         Path(args.output).resolve(),
     )
-    print(json.dumps({"segment_path": str(output_path), "index": args.index}, indent=2))
+    result = {"segment_path": str(output_path), "index": args.index}
+    if args.spool:
+        envelope = new_envelope("SEGMENT", json.loads(output_path.read_text()))
+        spool_path = export_message(Path(args.spool).resolve(), envelope)
+        result["spool_path"] = str(spool_path)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def send_offer_command(args: argparse.Namespace) -> int:
+    envelope = new_envelope("OFFER", offer_payload(Path(args.manifest).resolve()))
+    result = {"message_id": envelope.message_id, "message_type": envelope.message_type}
+    if args.message:
+        message_path = write_message_file(Path(args.message).resolve(), asdict(envelope))
+        result["message_path"] = str(message_path)
+    if args.spool:
+        result["spool_path"] = str(export_message(Path(args.spool).resolve(), envelope))
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -137,12 +240,23 @@ def receive_offer_command(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo).resolve()
     ensure_repo(repo_path)
     config = load_repo_config(repo_path)
-    progress = stage_artifact(
-        repo_path,
-        Path(args.manifest).resolve(),
-        expected_repo_id=config.repo_id,
-        expected_node_id=config.node_id,
-    )
+    if args.message:
+        envelope = read_envelope(Path(args.message).resolve())
+        if envelope.message_type != "OFFER":
+            raise ValueError("message is not an OFFER")
+        progress = stage_manifest(
+            repo_path,
+            manifest_from_offer_payload(envelope.payload),
+            expected_repo_id=config.repo_id,
+            expected_node_id=config.node_id,
+        )
+    else:
+        progress = stage_artifact(
+            repo_path,
+            Path(args.manifest).resolve(),
+            expected_repo_id=config.repo_id,
+            expected_node_id=config.node_id,
+        )
     print(json.dumps(asdict(progress), indent=2))
     return 0
 
@@ -150,10 +264,26 @@ def receive_offer_command(args: argparse.Namespace) -> int:
 def receive_segment_command(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo).resolve()
     ensure_repo(repo_path)
+    artifact_id = args.artifact_id
+    segment_path = Path(args.segment).resolve() if args.segment else None
+    if args.message:
+        envelope = read_envelope(Path(args.message).resolve())
+        if envelope.message_type != "SEGMENT":
+            raise ValueError("message is not a SEGMENT")
+        payload_artifact_id = envelope.payload.get("artifact_id")
+        if not isinstance(payload_artifact_id, str):
+            raise ValueError("segment message missing artifact_id")
+        artifact_id = payload_artifact_id
+        segment_path = write_message_file(
+            repo_path / ".longhaul" / "tmp" / f"{envelope.message_id}.segment.json",
+            envelope.payload,
+        )
+    if artifact_id is None or segment_path is None:
+        raise ValueError("segment input is incomplete")
     progress = ingest_segment(
         repo_path,
-        args.artifact_id,
-        Path(args.segment).resolve(),
+        artifact_id,
+        segment_path,
     )
     print(json.dumps(asdict(progress), indent=2))
     return 0
@@ -163,7 +293,15 @@ def receive_complete_command(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo).resolve()
     ensure_repo(repo_path)
     verification = assemble_staged_artifact(repo_path, args.artifact_id)
-    print(json.dumps(asdict(verification), indent=2))
+    result = asdict(verification)
+    if args.spool:
+        result["spool_path"] = str(
+            export_message(
+                Path(args.spool).resolve(),
+                new_envelope("COMPLETE", complete_payload(verification)),
+            )
+        )
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -204,10 +342,17 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser = subparsers.add_parser("send")
     send_subparsers = send_parser.add_subparsers(dest="send_command", required=True)
 
+    send_offer_parser = send_subparsers.add_parser("offer")
+    send_offer_parser.add_argument("--manifest", required=True)
+    send_offer_parser.add_argument("--message")
+    send_offer_parser.add_argument("--spool")
+    send_offer_parser.set_defaults(func=send_offer_command)
+
     send_segment_parser = send_subparsers.add_parser("segment")
     send_segment_parser.add_argument("--artifact-dir", required=True)
     send_segment_parser.add_argument("--index", type=int, required=True)
     send_segment_parser.add_argument("--output", required=True)
+    send_segment_parser.add_argument("--spool")
     send_segment_parser.set_defaults(func=send_segment_command)
 
     receive_parser = subparsers.add_parser("receive")
@@ -215,18 +360,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     offer_parser = receive_subparsers.add_parser("offer")
     offer_parser.add_argument("--repo", default=".")
-    offer_parser.add_argument("--manifest", required=True)
+    offer_group = offer_parser.add_mutually_exclusive_group(required=True)
+    offer_group.add_argument("--manifest")
+    offer_group.add_argument("--message")
     offer_parser.set_defaults(func=receive_offer_command)
 
     segment_parser = receive_subparsers.add_parser("segment")
     segment_parser.add_argument("--repo", default=".")
-    segment_parser.add_argument("--artifact-id", required=True)
-    segment_parser.add_argument("--segment", required=True)
+    segment_parser.add_argument("--artifact-id")
+    segment_group = segment_parser.add_mutually_exclusive_group(required=True)
+    segment_group.add_argument("--segment")
+    segment_group.add_argument("--message")
     segment_parser.set_defaults(func=receive_segment_command)
 
     complete_parser = receive_subparsers.add_parser("complete")
     complete_parser.add_argument("--repo", default=".")
     complete_parser.add_argument("--artifact-id", required=True)
+    complete_parser.add_argument("--spool")
     complete_parser.set_defaults(func=receive_complete_command)
 
     verify_parser = receive_subparsers.add_parser("verify")
@@ -238,7 +388,33 @@ def build_parser() -> argparse.ArgumentParser:
     apply_group = apply_parser.add_mutually_exclusive_group(required=True)
     apply_group.add_argument("--artifact-dir")
     apply_group.add_argument("--artifact-id")
+    apply_parser.add_argument("--spool")
     apply_parser.set_defaults(func=receive_apply_command)
+
+    nack_parser = receive_subparsers.add_parser("nack")
+    nack_parser.add_argument("--repo", default=".")
+    nack_parser.add_argument("--artifact-id", required=True)
+    nack_parser.add_argument("--message")
+    nack_parser.add_argument("--spool")
+    nack_parser.set_defaults(func=receive_nack_command)
+
+    transport_parser = subparsers.add_parser("transport")
+    transport_subparsers = transport_parser.add_subparsers(dest="transport_command", required=True)
+
+    transport_import_parser = transport_subparsers.add_parser("import")
+    transport_import_parser.add_argument("--spool", required=True)
+    transport_import_parser.add_argument("--message", required=True)
+    transport_import_parser.set_defaults(func=transport_import_command)
+
+    transport_list_parser = transport_subparsers.add_parser("list")
+    transport_list_parser.add_argument("--spool", required=True)
+    transport_list_parser.add_argument("--box", choices=["incoming", "outgoing"], default="incoming")
+    transport_list_parser.set_defaults(func=transport_list_command)
+
+    transport_read_parser = transport_subparsers.add_parser("read")
+    transport_read_parser.add_argument("--spool", required=True)
+    transport_read_parser.add_argument("--box", choices=["incoming", "outgoing"], default="incoming")
+    transport_read_parser.set_defaults(func=transport_read_command)
 
     return parser
 
