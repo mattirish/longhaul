@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .advertise import build_advertisement
+from .artifact import DEFAULT_SEGMENT_SIZE, plan_artifact
 from .git import GitError, current_head, ensure_repo, refs
 from .metadata import init_repo_config, load_receive_state, load_repo_config
 
@@ -45,6 +46,37 @@ def repo_advertise(args: argparse.Namespace) -> int:
     return 0
 
 
+def plan_artifact_command(args: argparse.Namespace) -> int:
+    repo_path = Path(args.repo).resolve()
+    ensure_repo(repo_path)
+    config = load_repo_config(repo_path)
+    manifest = plan_artifact(
+        repo_path,
+        Path(args.advertisement).resolve(),
+        args.target_ref,
+        Path(args.output_dir).resolve(),
+        expected_repo_id=config.repo_id,
+        sender_node_id=config.node_id,
+        baseline_ref=args.baseline_ref,
+        segment_size=args.segment_size,
+    )
+    output = {
+        "artifact_id": manifest.artifact_id,
+        "repo_id": manifest.repo_id,
+        "sender_node_id": config.node_id,
+        "receiver_node_id": manifest.receiver_node_id,
+        "baseline_commit": manifest.baseline_commit,
+        "target_ref": manifest.target_ref,
+        "target_commit": manifest.target_commit,
+        "payload_size": manifest.payload_size,
+        "object_count": manifest.object_count,
+        "segment_count": manifest.segment_count,
+        "manifest_path": str(Path(args.output_dir).resolve() / manifest.artifact_id / "manifest.json"),
+    }
+    print(json.dumps(output, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="longhaul")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -66,6 +98,18 @@ def build_parser() -> argparse.ArgumentParser:
     advertise_parser = repo_subparsers.add_parser("advertise")
     advertise_parser.add_argument("--repo", default=".")
     advertise_parser.set_defaults(func=repo_advertise)
+
+    plan_parser = subparsers.add_parser("plan")
+    plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
+
+    artifact_parser = plan_subparsers.add_parser("artifact")
+    artifact_parser.add_argument("--repo", default=".")
+    artifact_parser.add_argument("--advertisement", required=True)
+    artifact_parser.add_argument("--target-ref", required=True)
+    artifact_parser.add_argument("--output-dir", required=True)
+    artifact_parser.add_argument("--baseline-ref")
+    artifact_parser.add_argument("--segment-size", type=int, default=DEFAULT_SEGMENT_SIZE)
+    artifact_parser.set_defaults(func=plan_artifact_command)
 
     return parser
 

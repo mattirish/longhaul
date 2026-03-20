@@ -43,3 +43,42 @@ def refs(repo_path: Path) -> dict[str, str]:
         sha, ref = line.split(" ", 1)
         refs[ref] = sha
     return refs
+
+
+def rev_parse(repo_path: Path, ref: str) -> str:
+    return run_git(repo_path, "rev-parse", ref)
+
+
+def object_closure(repo_path: Path, target: str, baseline: str | None = None) -> list[str]:
+    args = ["rev-list", "--objects", target]
+    if baseline:
+        args.append(f"^{baseline}")
+    output = run_git(repo_path, *args)
+    if not output:
+        return []
+
+    objects: list[str] = []
+    for line in output.splitlines():
+        oid = line.split(" ", 1)[0]
+        objects.append(oid)
+    return objects
+
+
+def pack_objects(repo_path: Path, object_ids: list[str], output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not object_ids:
+        output_path.write_bytes(b"")
+        return
+
+    result = subprocess.run(
+        ["git", "pack-objects", "--compression=9", "--stdout"],
+        cwd=repo_path,
+        input="".join(f"{oid}\n" for oid in object_ids).encode(),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip()
+        stdout = result.stdout.decode(errors="replace").strip()
+        raise GitError(stderr or stdout or "git pack-objects failed")
+    output_path.write_bytes(result.stdout)
