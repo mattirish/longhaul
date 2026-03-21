@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
 from .freedata import FreeDataCommandClient, FreeDataDataClient, FreeDataSession, FreeDataSocketConfig
-from .messages import MessageEnvelope, read_envelope, write_envelope
+from .messages import MessageEnvelope, message_filename, read_envelope, serialize_envelope, write_envelope
 
 
 @dataclass
@@ -52,7 +51,7 @@ class SpoolAdapter:
     def send(self, envelope: MessageEnvelope) -> Path:
         self.ensure()
         return write_envelope(
-            self.outgoing_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            self.outgoing_dir / message_filename(envelope),
             envelope,
         )
 
@@ -60,7 +59,7 @@ class SpoolAdapter:
         self.ensure()
         envelope = read_envelope(path)
         return write_envelope(
-            self.incoming_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            self.incoming_dir / message_filename(envelope),
             envelope,
         )
 
@@ -138,10 +137,10 @@ class FreeDataAdapter:
     def send(self, envelope: MessageEnvelope) -> Path:
         self.ensure()
         path = write_envelope(
-            self.mirror.outgoing_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            self.mirror.outgoing_dir / message_filename(envelope),
             envelope,
         )
-        payload = json.dumps(asdict(envelope), separators=(",", ":")).encode()
+        payload = serialize_envelope(envelope)
         data_client = FreeDataDataClient(self.socket_config)
         if self.session_mode == "data-only":
             data_client.send(payload)
@@ -161,7 +160,7 @@ class FreeDataAdapter:
         self.ensure()
         envelope = read_envelope(path)
         return write_envelope(
-            self.mirror.incoming_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            self.mirror.incoming_dir / message_filename(envelope),
             envelope,
         )
 

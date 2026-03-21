@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from longhaul.freedata import FreeDataCommandClient, FreeDataSession, FreeDataSocketConfig
-from longhaul.messages import new_envelope
+from longhaul.messages import deserialize_envelope, new_envelope
 from longhaul.transport import freedata_adapter
 
 
@@ -104,9 +104,9 @@ class FreeDataIntegrationTest(unittest.TestCase):
             mirror_path = adapter.send(envelope)
             self.assertTrue(mirror_path.exists())
             self.assertTrue(self.data_server.payloads)  # type: ignore[attr-defined]
-            payload = json.loads(self.data_server.payloads[0].decode())  # type: ignore[index]
-            self.assertEqual(payload["message_id"], envelope.message_id)
-            self.assertEqual(payload["message_type"], "TEST")
+            payload = deserialize_envelope(self.data_server.payloads[0])  # type: ignore[index]
+            self.assertEqual(payload.message_id, envelope.message_id)
+            self.assertEqual(payload.message_type, "TEST")
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ from .messages import (
     new_envelope,
     offer_payload,
     read_envelope,
+    write_envelope,
 )
 from .metadata import init_repo_config, load_repo_config
 from .transport import (
@@ -109,7 +110,7 @@ def plan_artifact_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def write_message_file(path: Path, payload: object) -> Path:
+def write_json_file(path: Path, payload: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n")
     return path
@@ -182,7 +183,7 @@ def receive_nack_command(args: argparse.Namespace) -> int:
         envelope = new_envelope("NACK_RANGES", nack_ranges_payload(progress))
         output = {"artifact_id": args.artifact_id}
         if args.message:
-            output["message_path"] = str(write_message_file(Path(args.message).resolve(), asdict(envelope)))
+            output["message_path"] = str(write_envelope(Path(args.message).resolve(), envelope))
         if args.spool:
             output["spool_path"] = str(export_message(Path(args.spool).resolve(), envelope))
         if not args.message and not args.spool:
@@ -389,7 +390,7 @@ def send_offer_command(args: argparse.Namespace) -> int:
     envelope = new_envelope("OFFER", offer_payload(Path(args.manifest).resolve()))
     result = {"message_id": envelope.message_id, "message_type": envelope.message_type}
     if args.message:
-        message_path = write_message_file(Path(args.message).resolve(), asdict(envelope))
+        message_path = write_envelope(Path(args.message).resolve(), envelope)
         result["message_path"] = str(message_path)
     if args.spool:
         result["spool_path"] = str(export_message(Path(args.spool).resolve(), envelope))
@@ -435,7 +436,7 @@ def receive_segment_command(args: argparse.Namespace) -> int:
         if not isinstance(payload_artifact_id, str):
             raise ValueError("segment message missing artifact_id")
         artifact_id = payload_artifact_id
-        segment_path = write_message_file(
+        segment_path = write_json_file(
             repo_path / ".longhaul" / "tmp" / f"{envelope.message_id}.segment.json",
             envelope.payload,
         )

@@ -122,7 +122,7 @@ ARTIFACT_DIR="$(find "${ARTIFACT_ROOT}" -mindepth 1 -maxdepth 1 -type d | head -
 MANIFEST_PATH="${ARTIFACT_DIR}/manifest.json"
 PAYLOAD_PATH="${ARTIFACT_DIR}/payload.pack"
 
-python3 -m longhaul.cli send offer --manifest "${MANIFEST_PATH}" --message "${WORKDIR}/offer.json" >/dev/null
+python3 -m longhaul.cli send offer --manifest "${MANIFEST_PATH}" --message "${WORKDIR}/offer.lhm" >/dev/null
 
 SEGMENT_COUNT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["segment_count"])' "${MANIFEST_PATH}")"
 mkdir -p "${WORKDIR}/segment-messages"
@@ -147,8 +147,7 @@ segment_size = int(sys.argv[4])
 link_bps = int(sys.argv[5])
 
 manifest = json.loads((next((workdir / "artifact").glob("*/manifest.json"))).read_text())
-offer = json.loads((workdir / "offer.json").read_text())
-segment_envelopes = sorted((workdir / "segment-messages" / "outgoing").glob("*-SEGMENT.json"))
+segment_envelopes = sorted((workdir / "segment-messages" / "outgoing").glob("*-SEGMENT.lhm"))
 
 def size(path: Path) -> int:
     return path.stat().st_size
@@ -182,10 +181,10 @@ metrics = {
             "estimated_airtime_seconds": airtime(size(payload)),
         },
         "longhaul_protocol_messages": {
-            "offer_bytes": size(workdir / "offer.json"),
+            "offer_bytes": size(workdir / "offer.lhm"),
             "segment_message_bytes": sum(size(path) for path in segment_envelopes),
             "message_count": 1 + len(segment_envelopes),
-            "estimated_airtime_seconds": airtime(size(workdir / "offer.json") + sum(size(path) for path in segment_envelopes)),
+            "estimated_airtime_seconds": airtime(size(workdir / "offer.lhm") + sum(size(path) for path in segment_envelopes)),
         },
     },
     "manifest": {

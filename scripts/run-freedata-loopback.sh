@@ -84,12 +84,12 @@ ARTIFACT_ID="$(basename "${ARTIFACT_DIR}")"
 
 python3 -m longhaul.cli send offer \
   --manifest "${ARTIFACT_DIR}/manifest.json" \
-  --message "${WORKDIR}/messages/offer.json" >/dev/null
+  --message "${WORKDIR}/messages/offer.lhm" >/dev/null
 
 python3 -m longhaul.cli transport dispatch \
   --transport freedata \
   --root "${WORKDIR}/transport" \
-  --message "${WORKDIR}/messages/offer.json" \
+  --message "${WORKDIR}/messages/offer.lhm" \
   --station-id denver \
   --peer-id michigan \
   --host "${HOST}" \
@@ -110,7 +110,7 @@ for i in $(seq 0 $((SEGMENT_COUNT - 1))); do
     --spool "${WORKDIR}/sender-spool" >/dev/null
 done
 
-for msg in "${WORKDIR}/sender-spool"/outgoing/*-SEGMENT.json; do
+for msg in "${WORKDIR}/sender-spool"/outgoing/*-SEGMENT.lhm; do
   python3 -m longhaul.cli transport dispatch \
     --transport freedata \
     --root "${WORKDIR}/transport" \
@@ -126,10 +126,10 @@ for msg in "${WORKDIR}/sender-spool"/outgoing/*-SEGMENT.json; do
     --spool "${WORKDIR}/receiver-spool" >/dev/null
 done
 
-OFFER_PATH="$(find "${WORKDIR}/receiver-spool/incoming" -maxdepth 1 -type f -name '*-OFFER.json' | head -n 1)"
+OFFER_PATH="$(find "${WORKDIR}/receiver-spool/incoming" -maxdepth 1 -type f -name '*-OFFER.lhm' | head -n 1)"
 python3 -m longhaul.cli receive offer --repo "${WORKDIR}/receiver" --message "${OFFER_PATH}" >/dev/null
 
-for msg in "${WORKDIR}/receiver-spool"/incoming/*-SEGMENT.json; do
+for msg in "${WORKDIR}/receiver-spool"/incoming/*-SEGMENT.lhm; do
   python3 -m longhaul.cli receive segment --repo "${WORKDIR}/receiver" --message "${msg}" >/dev/null
 done
 
@@ -162,7 +162,7 @@ result = {
     "target_commit": manifest["target_commit"],
     "receiver_head": receiver_head,
     "receiver_matches_target": receiver_head == manifest["target_commit"],
-    "receiver_spool_count": len(list((workdir / "receiver-spool" / "incoming").glob("*.json"))),
+    "receiver_spool_count": len(list((workdir / "receiver-spool" / "incoming").glob("*.lhm"))),
     "loopback_inbox_count": len(list(Path("${INBOX}").glob("*.json"))),
     "receive_state": receive_state,
 }

@@ -2,11 +2,26 @@ from __future__ import annotations
 
 import json
 import uuid
+import zlib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from .artifact import ArtifactManifest, ReceiveProgress, VerificationResult, load_manifest, manifest_from_data
+
+
+MAGIC = b"LH\x01"
+FLAG_COMPRESSED_JSON = 1
+MESSAGE_EXTENSION = ".lhm"
+MESSAGE_TYPES = {
+    "OFFER": 1,
+    "SEGMENT": 2,
+    "NACK_RANGES": 3,
+    "COMPLETE": 4,
+    "APPLY_RESULT": 5,
+    "TEST": 255,
+}
+MESSAGE_TYPES_BY_CODE = {value: key for key, value in MESSAGE_TYPES.items()}
 
 
 @dataclass
@@ -26,17 +41,102 @@ def new_envelope(message_type: str, payload: dict[str, Any], *, protocol_version
     )
 
 
+def message_filename(envelope: MessageEnvelope) -> str:
+    return f"{envelope.message_id}-{envelope.message_type}{MESSAGE_EXTENSION}"
+
+
+def _encode_segment_payload(payload: dict[str, Any]) -> bytes:
+    artifact_id = uuid.UUID(str(payload["artifact_id"])).bytes
+    index = int(payload["index"]).to_bytes(4, byteorder="big", signed=False)
+    sha256 = bytes.fromhex(str(payload["sha256"]))
+    data = __import__("base64").b64decode(str(payload["data"]))
+    length = len(data).to_bytes(4, byteorder="big", signed=False)
+    return artifact_id + index + sha256 + length + data
+
+
+def _decode_segment_payload(data: bytes) -> dict[str, Any]:
+    if len(data) < 56:
+        raise ValueError("segment payload is truncated")
+    artifact_id = str(uuid.UUID(bytes=data[:16]))
+    index = int.from_bytes(data[16:20], byteorder="big", signed=False)
+    sha256 = data[20:52].hex()
+    length = int.from_bytes(data[52:56], byteorder="big", signed=False)
+    segment_data = data[56 : 56 + length]
+    if len(segment_data) != length:
+        raise ValueError("segment payload length does not match header")
+    return {
+        "artifact_id": artifact_id,
+        "index": index,
+        "sha256": sha256,
+        "data": __import__("base64").b64encode(segment_data).decode(),
+    }
+
+
+def serialize_envelope(envelope: MessageEnvelope) -> bytes:
+    type_code = MESSAGE_TYPES.get(envelope.message_type)
+    if type_code is None:
+        raise ValueError(f"unsupported message type: {envelope.message_type}")
+    if envelope.message_type == "SEGMENT":
+        flags = 0
+        payload = _encode_segment_payload(envelope.payload)
+    else:
+        flags = FLAG_COMPRESSED_JSON
+        payload = zlib.compress(
+            json.dumps(envelope.payload, separators=(",", ":"), sort_keys=True).encode(),
+            level=9,
+        )
+    header = bytearray()
+    header.extend(MAGIC)
+    header.append(type_code)
+    header.append(flags)
+    header.extend(uuid.UUID(envelope.message_id).bytes)
+    header.extend(len(payload).to_bytes(4, byteorder="big", signed=False))
+    return bytes(header) + payload
+
+
+def deserialize_envelope(data: bytes) -> MessageEnvelope:
+    if data.startswith(MAGIC):
+        if len(data) < 25:
+            raise ValueError("message frame is truncated")
+        type_code = data[3]
+        flags = data[4]
+        message_type = MESSAGE_TYPES_BY_CODE.get(type_code)
+        if message_type is None:
+            raise ValueError(f"unsupported message type code: {type_code}")
+        message_id = str(uuid.UUID(bytes=data[5:21]))
+        payload_length = int.from_bytes(data[21:25], byteorder="big", signed=False)
+        payload_bytes = data[25 : 25 + payload_length]
+        if len(payload_bytes) != payload_length:
+            raise ValueError("message payload length does not match header")
+        if message_type == "SEGMENT":
+            payload = _decode_segment_payload(payload_bytes)
+        else:
+            if flags & FLAG_COMPRESSED_JSON:
+                payload_bytes = zlib.decompress(payload_bytes)
+            payload = json.loads(payload_bytes.decode())
+            if not isinstance(payload, dict):
+                raise ValueError("message payload must decode to an object")
+        return MessageEnvelope(
+            message_id=message_id,
+            message_type=message_type,
+            protocol_version=1,
+            payload=payload,
+        )
+
+    decoded = json.loads(data.decode())
+    if not isinstance(decoded, dict):
+        raise ValueError("message envelope must be a JSON object")
+    return MessageEnvelope(**decoded)
+
+
 def write_envelope(path: Path, envelope: MessageEnvelope) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(envelope), indent=2) + "\n")
+    path.write_bytes(serialize_envelope(envelope))
     return path
 
 
 def read_envelope(path: Path) -> MessageEnvelope:
-    data = json.loads(path.read_text())
-    if not isinstance(data, dict):
-        raise ValueError("message envelope must be a JSON object")
-    return MessageEnvelope(**data)
+    return deserialize_envelope(path.read_bytes())
 
 
 def offer_payload(manifest_path: Path) -> dict[str, Any]:
