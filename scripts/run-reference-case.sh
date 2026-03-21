@@ -191,7 +191,6 @@ metrics = {
         "artifact_id": manifest["artifact_id"],
         "payload_size": manifest["payload_size"],
         "segment_count": manifest["segment_count"],
-        "object_count": manifest["object_count"],
         "target_ref": manifest["target_ref"],
     },
 }

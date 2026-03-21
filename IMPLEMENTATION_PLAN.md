@@ -2,13 +2,13 @@
 
 ## Objective
 
-Build the minimum viable Longhaul engine that can move a normal Git repository from a known baseline to a target ref over a hostile link with resumable segmented transfer.
+Build the minimum viable Longhaul engine that can move a normal Git repository from a known baseline to a target ref over a hostile link by segmenting and resuming a Git bundle artifact.
 
 ## Guiding Rule
 
 Do not integrate radio transport before proving the artifact, resume, and import model locally.
 
-The highest technical risk is in update planning and resumable transfer semantics, not in wiring bytes into a modem.
+The highest technical risk is in multi-session resume and apply semantics, not in inventing a new payload format or wiring bytes into a modem.
 
 ## Phase 1: Repository Metadata And State Advertisement
 
@@ -29,14 +29,14 @@ Acceptance criteria:
 Deliverables:
 
 - target ref selection
-- baseline-to-target object closure computation
+- bundle artifact generation from advertised baseline to target ref
 - artifact metadata file
 - segment manifest generation
 
 Acceptance criteria:
 
-- given a receiver baseline and target ref, the sender can create a portable artifact description
-- resulting payload includes only required Git-native objects for the chosen update path
+- given a receiver baseline and target ref, the sender can create a portable Git bundle artifact description
+- resulting payload is Git-native and efficient enough to benchmark directly against `git bundle`
 
 ## Phase 3: Artifact Import
 
@@ -82,7 +82,7 @@ Acceptance criteria:
 
 - complete end-to-end update using only local files as transport
 - protocol messages remain transport-neutral
-- sender and receiver can exchange `OFFER`, `SEGMENT`, `NACK_RANGES`, `COMPLETE`, and `APPLY_RESULT` messages through the spool model
+- sender and receiver can exchange `OFFER`, `SEGMENT`, and optional resume/result messages through the spool model
 
 ## Phase 6: Radio Transport Adapter
 
@@ -171,7 +171,6 @@ Required test layers:
 
 ## Open Questions
 
-- should the payload be a raw packfile or a more structured bundle-derived container
 - what segment size best balances framing overhead versus retransmission waste
 - how compact should resume state encoding be on the wire
 - whether ref advertisements alone are sufficient for expected real-world histories in v1

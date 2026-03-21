@@ -9,22 +9,15 @@ The current integration target is FreeDATA's socket interface:
 - command socket
 - data socket
 
-Longhaul uses the command socket for:
+Longhaul uses the data socket for opaque Longhaul protocol bytes.
+It can also use the command socket for probing and optional session setup, but that is no longer the preferred default boundary.
 
-- `VERSION`
-- `MYCALL`
-- `BW`
-- `CONNECT`
-- `DISCONNECT`
-
-Longhaul uses the data socket for:
-
-- opaque Longhaul message envelope bytes
-
-Longhaul now supports two FreeDATA session modes:
+Longhaul supports two FreeDATA session modes:
 
 - `auto`: issue `VERSION`, `MYCALL`, `BW`, `CONNECT`, send data, then `DISCONNECT`
-- `data-only`: send envelope bytes directly to the FreeDATA data socket without invoking the connection state machine
+- `data-only`: send protocol bytes directly to the FreeDATA data socket without invoking the connection state machine
+
+`data-only` is now the architectural default because FreeDATA should own live session behavior while Longhaul stays at the artifact layer.
 
 ## What Was Validated
 
@@ -33,8 +26,7 @@ The following was validated locally in this repository:
 - the bundled FreeDATA `libcodec2` loads correctly when the daemon is run as `x86_64` under Rosetta on Apple Silicon
 - the FreeDATA socket interface can be started with a local config
 - `longhaul transport probe --transport freedata ...` successfully reaches the real command socket and receives `VERSION FREEDATA`
-- `longhaul transport dispatch --transport freedata ...` successfully sends a Longhaul envelope through the real FreeDATA command/data socket path
-- FreeDATA logs show the exact Longhaul JSON envelope arriving on the data socket
+- `longhaul transport dispatch --transport freedata ...` successfully sends Longhaul protocol frames through the real FreeDATA command/data socket path
 - in FreeDATA test mode, the data socket now writes one complete payload per connection into a local loopback inbox
 - `longhaul transport loopback-import ...` can ingest those loopback payloads into a Longhaul spool as normal `OFFER` and `SEGMENT` envelopes
 - a full local multi-segment loop now works end-to-end: sender plans an artifact, dispatches `OFFER` plus `SEGMENT` messages through the live FreeDATA daemon in `data-only` mode, receiver stages and assembles the artifact, verifies it, and advances to the target commit
@@ -68,7 +60,7 @@ The remaining limitation is narrower:
 - asynchronous `CONNECT` / `DISCONNECT` responses can race with the short-lived Longhaul command client
 - the daemon remains up, but a full peer session is still not established in this local no-RF mode
 
-For local development, `data-only` is currently the recommended mode because it validates Longhaul envelope delivery into the live FreeDATA daemon without dragging in the unstable local peer-session path.
+For local development, `data-only` is the recommended mode because it validates Longhaul artifact delivery into the live FreeDATA daemon without dragging in the unstable local peer-session path.
 
 ## Apple Silicon Note
 
@@ -135,7 +127,7 @@ PYTHONPATH=src python3 -m longhaul.cli transport probe \
 PYTHONPATH=src python3 -m longhaul.cli transport dispatch \
   --transport freedata \
   --root /tmp/longhaul-freedata \
-  --message /tmp/longhaul-freedata-offer.json \
+  --message /tmp/longhaul-freedata-offer.lhm \
   --station-id N0CALL \
   --peer-id K0PEER \
   --host 127.0.0.1 \
@@ -157,7 +149,6 @@ PYTHONPATH=src python3 -m longhaul.cli transport loopback-import \
 The next meaningful integration steps are:
 
 - determine whether FreeDATA test mode can be extended to simulate a full peer session instead of only looping back the data socket payload
-- formalize the local loop harness into a repeatable integration test script
 - validate Longhaul transfer over a real modem-backed FreeDATA session once the daemon bootstrap is stable
 
 For before/after sizing work that does not require the live daemon, use [scripts/run-reference-case.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-reference-case.sh). It generates a deterministic sender/receiver fixture and prints comparative byte counts and estimated airtime for:

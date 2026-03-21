@@ -89,7 +89,7 @@ class FreeDataAdapter:
     cmd_port: int = 9000
     data_port: int = 9001
     bandwidth: int = 2300
-    session_mode: str = "auto"
+    session_mode: str = "data-only"
 
     CONFIG_FILE = "freedata-config.json"
 

@@ -12,6 +12,8 @@ That keeps the first implementation honest about the actual system shape:
 - segmented transfer
 - receiver-side import
 
+In the current design, the artifact payload is a Git bundle and Longhaul's job is to orchestrate its transfer over a hostile link.
+
 ## Principles
 
 - commands should map cleanly to protocol stages
@@ -76,7 +78,7 @@ Initial commands:
 
 Purpose:
 
-- compute the required Git-native payload from a receiver advertisement and a target ref
+- compute the required Git bundle artifact from a receiver advertisement and a target ref
 - write a Longhaul artifact plus manifest
 
 Expected inputs:
@@ -90,7 +92,7 @@ Expected outputs:
 
 - artifact metadata
 - segment manifest
-- payload segments or a segmentable payload container
+- a segmentable Git bundle payload container
 
 ### `longhaul send`
 
@@ -179,6 +181,7 @@ Purpose:
 - send a prepared protocol message through either the spool transport or the FreeDATA adapter
 
 For `--transport freedata`, use `--session-mode data-only` for local testmode daemon work when you want to validate data-socket delivery without triggering the FreeDATA connection state machine.
+That is also the preferred architectural default: FreeDATA owns live session behavior, while Longhaul stays at the artifact layer.
 
 ### `longhaul receive`
 
@@ -215,7 +218,7 @@ Expected behavior:
 
 - verify length and segment hash before persistence
 - store the segment durably
-- update missing-range state without requiring per-segment ACK chatter
+- update artifact-level missing-range state without trying to replace transport-level retry behavior
 
 #### `longhaul receive complete`
 
@@ -256,7 +259,7 @@ Purpose:
 
 Purpose:
 
-- emit a compact `NACK_RANGES` message for a staged incomplete artifact
+- emit a compact `NACK_RANGES` message for a staged incomplete artifact when the sender needs explicit multi-session resume guidance
 
 ## Suggested V1 Workflow
 
@@ -266,7 +269,7 @@ Purpose:
 4. receiver imports the `OFFER` message and runs `longhaul receive offer`
 5. sender emits `SEGMENT` messages through the transport spool
 6. receiver imports and processes segments with `longhaul receive segment`
-7. receiver emits `NACK_RANGES` if needed
+7. receiver emits `NACK_RANGES` only if explicit artifact-level resume guidance is needed
 8. sender retransmits only missing ranges
 9. receiver runs `longhaul receive complete`
 10. receiver runs `longhaul receive apply`

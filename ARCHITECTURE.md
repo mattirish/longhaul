@@ -61,15 +61,18 @@ The sender computes what the receiver needs based on the receiver's advertised b
 
 This layer is responsible for:
 
-- identifying the target object closure
-- minimizing transmitted objects
-- preparing a transport artifact before airtime is used
+- identifying the correct baseline and target ref
+- preparing a Git-native transfer artifact before airtime is used
+- minimizing on-air work by front-loading sender computation
 
 This work must happen before transmission whenever possible.
 
 ### 3. Artifact Layer
 
 The selected Git payload is wrapped in a Longhaul transfer artifact.
+
+In the current design, the payload itself is a Git bundle.
+Longhaul does not try to replace Git's own efficient offline packaging when Git already solves that part well.
 
 The artifact adds:
 
@@ -88,16 +91,22 @@ The session layer handles:
 - state advertisement
 - artifact offers
 - segment transfer
-- missing-range reporting
-- completion reporting
+- durable receive progress
+- completion/apply reporting
 
 The session layer must be sparse in control traffic and tolerant of pauses between sessions.
+It should not duplicate the transport's own within-session retry behavior.
 
 ### 5. Transport Adapter
 
 The transport adapter moves opaque Longhaul protocol messages.
 
 The sync engine must not assume a specific modem or radio stack. HF radio via FreeDATA is the initial target, but the architecture should remain transport-neutral.
+
+For FreeDATA specifically, the boundary is:
+
+- FreeDATA owns live-session reliability, retries, and connection behavior
+- Longhaul owns artifact identity, multi-session durable progress, and Git-aware apply semantics
 
 ## Why Not Native Git Protocol
 
@@ -107,7 +116,7 @@ Native Git transport is the wrong fit because it assumes:
 - tolerable round-trip cost
 - reasonably stable sessions
 
-Those assumptions fail on hostile low-rate links. Longhaul keeps Git repositories and Git objects, but replaces the on-air session and transfer behavior.
+Those assumptions fail on hostile low-rate links. Longhaul keeps Git repositories and Git-native bundle payloads, but replaces the on-air orchestration around them.
 
 ## Receiver Baseline Model
 
@@ -125,7 +134,7 @@ V1 does not require a full object inventory advertisement. That would often cost
 
 ## Transfer Model
 
-The sender computes a Git-native payload containing exactly the required objects to move the receiver from its known baseline to the target ref.
+The sender computes a Git-native payload to move the receiver from its known baseline to the target ref.
 
 That payload is split into fixed or bounded-size segments and transmitted over one or more sessions.
 
@@ -141,7 +150,7 @@ The receiver:
 
 Integrity is checked at multiple levels:
 
-- Git object integrity inside the repository model
+- Git/bundle integrity inside the repository model
 - per-segment hash verification during transfer
 - whole-artifact hash verification before import
 - ref update only after successful import
@@ -162,8 +171,9 @@ The system must recover by:
 
 - persisting received segments
 - ignoring valid duplicates
-- requesting only missing ranges
 - resuming across long delays
+
+It should not attempt to replace the transport's own burst/session retry logic.
 
 ## Bidirectional Future Direction
 

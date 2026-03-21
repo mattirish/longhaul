@@ -22,8 +22,8 @@ It then compares:
 
 - naive `tar.gz` of the changed files
 - `git bundle` from baseline to target
-- Longhaul's planned Git pack payload
-- Longhaul's current protocol message envelopes
+- Longhaul's planned bundle payload
+- Longhaul's current protocol messages
 
 The script prints JSON metrics including byte counts and estimated airtime at a configurable link rate.
 
@@ -63,7 +63,7 @@ That is still not the end state, but it is the right trend and exactly the kind 
 So this benchmark now serves two purposes:
 
 - compare Longhaul against practical pre-existing workflows
-- measure progress as Longhaul replaces development-friendly framing with a more compact on-air encoding
+- measure progress as Longhaul reduces the overhead of its artifact-resume layer around Git-native bundles
 
 ## How To Use It
 

@@ -103,7 +103,6 @@ def plan_artifact_command(args: argparse.Namespace) -> int:
         "target_ref": manifest.target_ref,
         "target_commit": manifest.target_commit,
         "payload_size": manifest.payload_size,
-        "object_count": manifest.object_count,
         "segment_count": manifest.segment_count,
         "manifest_path": str(Path(args.output_dir).resolve() / manifest.artifact_id / "manifest.json"),
     }
@@ -595,7 +594,7 @@ def build_parser() -> argparse.ArgumentParser:
     transport_init_parser.add_argument("--cmd-port", type=int, default=9000)
     transport_init_parser.add_argument("--data-port", type=int, default=9001)
     transport_init_parser.add_argument("--bandwidth", type=int, default=2300)
-    transport_init_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="auto")
+    transport_init_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="data-only")
     transport_init_parser.set_defaults(func=transport_init_command)
 
     transport_status_parser = transport_subparsers.add_parser("status")
@@ -608,7 +607,7 @@ def build_parser() -> argparse.ArgumentParser:
     transport_status_parser.add_argument("--cmd-port", type=int, default=9000)
     transport_status_parser.add_argument("--data-port", type=int, default=9001)
     transport_status_parser.add_argument("--bandwidth", type=int, default=2300)
-    transport_status_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="auto")
+    transport_status_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="data-only")
     transport_status_parser.set_defaults(func=transport_status_command)
 
     transport_import_parser = transport_subparsers.add_parser("import")
@@ -636,7 +635,7 @@ def build_parser() -> argparse.ArgumentParser:
     transport_probe_parser.add_argument("--cmd-port", type=int, default=9000)
     transport_probe_parser.add_argument("--data-port", type=int, default=9001)
     transport_probe_parser.add_argument("--bandwidth", type=int, default=2300)
-    transport_probe_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="auto")
+    transport_probe_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="data-only")
     transport_probe_parser.set_defaults(func=transport_probe_command)
 
     transport_dispatch_parser = transport_subparsers.add_parser("dispatch")
@@ -650,7 +649,7 @@ def build_parser() -> argparse.ArgumentParser:
     transport_dispatch_parser.add_argument("--cmd-port", type=int, default=9000)
     transport_dispatch_parser.add_argument("--data-port", type=int, default=9001)
     transport_dispatch_parser.add_argument("--bandwidth", type=int, default=2300)
-    transport_dispatch_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="auto")
+    transport_dispatch_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="data-only")
     transport_dispatch_parser.set_defaults(func=transport_dispatch_command)
 
     transport_loopback_parser = transport_subparsers.add_parser("loopback-import")

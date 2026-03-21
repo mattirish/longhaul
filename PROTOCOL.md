@@ -20,7 +20,7 @@ The receiver does not negotiate object-by-object during transfer. Instead:
 1. the receiver advertises compact repository state
 2. the sender prepares an artifact offline
 3. the sender transmits artifact segments
-4. the receiver reports only compact receipt state or missing ranges
+4. the receiver records durable progress across sessions
 5. the receiver verifies and imports the artifact once complete
 
 ## V1 Assumptions
@@ -64,39 +64,11 @@ The manifest may be transmitted in full or derived from deterministic rules plus
 
 ### Payload
 
-The payload is a Git-native object payload prepared by the sender. In v1 this should be a packfile or packfile-equivalent container containing exactly the required objects for the target closure relative to the advertised baseline.
+The payload is a Git bundle prepared by the sender for the advertised baseline and target ref.
+
+Longhaul does not try to replace Git's own offline packaging here. It adds segmentation, durable receive state, and staged apply behavior around the bundle.
 
 ## Message Types
-
-### `HELLO`
-
-Purpose:
-
-- establish protocol version
-- identify peer
-- identify repository context
-
-Fields:
-
-- protocol version
-- node ID
-- repository ID
-
-### `STATE`
-
-Purpose:
-
-- advertise receiver baseline
-- advertise incomplete transfer state
-
-Fields:
-
-- node ID
-- repository ID
-- tracked refs and commit hashes
-- current baseline commit for requested ref
-- incomplete artifact IDs, if any
-- received segment ranges or bitmap summary, if resuming
 
 ### `OFFER`
 
@@ -129,19 +101,21 @@ Fields:
 - segment hash
 - payload bytes
 
-In the file-backed mock transport, the payload bytes are serialized inside a JSON envelope using a transport-safe encoding.
+In the current implementation, protocol messages are compact Longhaul binary frames rather than JSON development envelopes.
 
 ### `NACK_RANGES`
 
 Purpose:
 
-- request retransmission of missing ranges only
+- report which artifact ranges remain missing after one or more sessions
 
 Fields:
 
 - artifact ID
 - missing segment ranges
 - optional received segment summary
+
+This is an application-layer resume message. It does not replace the transport's own within-session retry logic.
 
 ### `COMPLETE`
 
@@ -178,23 +152,20 @@ The file-backed transport model has:
 - an `outgoing/` directory for emitted protocol envelopes
 - an `incoming/` directory for imported protocol envelopes
 
-Each message is a JSON envelope containing:
+Each message is a Longhaul message frame stored in a spool file.
 
-- message ID
-- message type
-- protocol version
-- payload
-
-This is not the final on-air framing. It is a development transport that forces the protocol boundary to remain explicit while keeping message contents inspectable during implementation.
+This keeps the transport boundary explicit without depending on the live radio stack.
 
 ## FreeDATA Transport Direction
 
-The initial radio-facing adapter targets FreeDATA's socket interface:
+The initial radio-facing adapter targets FreeDATA's socket interface.
 
-- a command socket for control commands such as `VERSION`, `MYCALL`, `BW`, and `CONNECT`
-- a data socket for payload bytes
+The intended boundary is:
 
-In the current implementation, Longhaul serializes a protocol envelope to JSON bytes and hands that opaque payload to the FreeDATA data socket after basic command-socket setup. This preserves the Longhaul message model while leaving room for later optimization of on-air framing and session handling.
+- FreeDATA owns live-session reliability, retries, and connection behavior
+- Longhaul owns artifact identity, durable receive progress, and staged Git apply
+
+For that reason, the default FreeDATA mode in Longhaul is `data-only`, where Longhaul hands opaque protocol bytes to FreeDATA's data socket without trying to manage the FreeDATA connection state machine itself.
 
 ## Resume Semantics
 
@@ -205,8 +176,10 @@ Rules:
 - the receiver persists verified segments immediately
 - duplicate valid segments are ignored
 - the sender may resume after any interruption
-- the receiver reports compact missing ranges instead of per-segment acknowledgements
 - ref updates are prohibited until the full artifact verifies successfully
+
+Longhaul resume is artifact-level and multi-session.
+It is not a replacement for the transport's own packet or burst retry behavior.
 
 ## Segment Strategy
 
@@ -226,7 +199,7 @@ Rationale:
 
 - advertising refs is cheap
 - full object inventory exchange can be expensive
-- most expected syncs will occur between related histories where commit ancestry is enough to compute a useful minimal payload
+- most expected syncs will occur between related histories where a bundle relative to the advertised baseline is enough
 
 If later measurements show that additional inventory exchange saves significant airtime overall, that can be added as an extension.
 

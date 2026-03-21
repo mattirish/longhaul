@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
-from .git import canonical_ref, create_bundle, import_bundle, object_closure, object_exists, rev_parse, rev_parse_optional, update_ref
+from .git import canonical_ref, create_bundle, import_bundle, object_exists, rev_parse, rev_parse_optional, update_ref
 from .metadata import (
     ReceiveArtifactState,
     artifact_incoming_dir,
@@ -42,7 +42,6 @@ class ArtifactManifest:
     target_commit: str
     payload_path: str
     payload_size: int
-    object_count: int
     segment_size: int
     segment_count: int
     payload_sha256: str
@@ -163,8 +162,6 @@ def plan_artifact(
     resolved_target_ref = canonical_ref(repo_path, target_ref)
     target_commit = rev_parse(repo_path, target_ref)
     baseline_commit = baseline_for_target(advertisement, target_ref, baseline_ref)
-    object_ids = object_closure(repo_path, target_commit, baseline_commit)
-
     artifact_id = str(uuid.uuid4())
     artifact_dir = output_dir / artifact_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -185,7 +182,6 @@ def plan_artifact(
         target_commit=target_commit,
         payload_path=str(payload_path.relative_to(artifact_dir)),
         payload_size=payload_size,
-        object_count=len(object_ids),
         segment_size=segment_size,
         segment_count=len(segments),
         payload_sha256=sha256_file(payload_path),
