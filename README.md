@@ -92,6 +92,7 @@ Longhaul now has:
 
 The FreeDATA adapter is intentionally early. It mirrors all emitted messages locally and targets the daemon socket interface, but it has not yet been validated against a live on-air session in this repository.
 The vendored FreeDATA submodule now also carries a small `enable_testmode` patch to make local socket-interface development possible without a live modem/audio path.
+The repository now includes a repeatable local loop harness at [scripts/run-freedata-loopback.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-freedata-loopback.sh) that drives a full sender-to-receiver artifact transfer through the live local FreeDATA daemon in test mode.
 
 ## Non-Goals For V1
 

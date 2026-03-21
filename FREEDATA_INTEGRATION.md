@@ -87,6 +87,22 @@ FREEDATA_CONFIG=/tmp/longhaul-freedata-live.ini arch -x86_64 .venv-x86/bin/pytho
 
 ## Local Validation Flow
 
+For a full end-to-end local loop, use [scripts/run-freedata-loopback.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-freedata-loopback.sh). It:
+
+- starts the patched local FreeDATA daemon in test mode
+- provisions throwaway sender and receiver Git repos
+- plans a multi-segment artifact
+- dispatches `OFFER` and all `SEGMENT` messages through the live FreeDATA data socket
+- imports looped-back payloads into a receiver spool
+- stages, verifies, and applies the artifact on the receiver
+- prints a JSON summary with the final receiver head
+
+Example:
+
+```bash
+scripts/run-freedata-loopback.sh
+```
+
 1. Initialize a FreeDATA transport root:
 
 ```bash

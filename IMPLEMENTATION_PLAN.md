@@ -99,6 +99,22 @@ Acceptance criteria:
 - radio integration does not change repository or artifact semantics
 - the repository contains a concrete integration target rather than a placeholder transport name
 
+## Phase 7: Local Radio Loop Harness
+
+Deliverables:
+
+- repeatable script to start the patched local FreeDATA daemon in test mode
+- throwaway sender/receiver repo fixture generation
+- end-to-end `OFFER` plus `SEGMENT` dispatch through the live data socket
+- receiver-side loopback import, assembly, verification, and apply
+- machine-readable summary of final convergence state
+
+Acceptance criteria:
+
+- one command can reproduce the full local loop on a development machine
+- the harness proves receiver convergence to the planned target commit
+- the harness is suitable as the baseline for future reference-case testing
+
 ## Data Model Sketch
 
 Repository-local metadata:
