@@ -43,7 +43,7 @@ That makes it suitable as the first public "before Longhaul" comparison.
 
 The current reference case shows two things clearly:
 
-- Longhaul's planned pack payload is in the same general class as other Git-native delta packaging methods
+- Longhaul's planned bundle payload is now effectively at `git bundle` parity on the default fixture
 - message framing matters enough that it can dominate airtime if it is not compact
 
 The first implementation used JSON envelopes for all protocol messages.
@@ -51,7 +51,12 @@ That was useful for debugging, but too expensive for the actual HF target.
 
 Longhaul now uses compact binary framing for `SEGMENT` messages and compressed framing for the remaining protocol messages.
 
-On the default reference case at `2000 bps`, that changed the estimated protocol-message airtime from about `65.0` seconds down to about `29.2` seconds.
+On the default reference case at `2000 bps`, that changed the estimated protocol-message airtime from about `65.0` seconds down to about `23.9` seconds.
+
+On the same fixture, the current payload comparison is roughly:
+
+- `git bundle`: about `3627` bytes
+- Longhaul bundle payload: about `3638` bytes
 
 That is still not the end state, but it is the right trend and exactly the kind of improvement this benchmark is meant to force into the open.
 

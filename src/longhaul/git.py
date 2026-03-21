@@ -98,6 +98,14 @@ def pack_objects(repo_path: Path, object_ids: list[str], output_path: Path) -> N
     output_path.write_bytes(result.stdout)
 
 
+def create_bundle(repo_path: Path, output_path: Path, target_ref: str, baseline: str | None = None) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    args = ["bundle", "create", str(output_path), target_ref]
+    if baseline:
+        args.append(f"^{baseline}")
+    run_git(repo_path, *args)
+
+
 def unpack_objects(repo_path: Path, pack_path: Path) -> None:
     result = subprocess.run(
         ["git", "unpack-objects"],
@@ -110,6 +118,10 @@ def unpack_objects(repo_path: Path, pack_path: Path) -> None:
         stderr = result.stderr.decode(errors="replace").strip()
         stdout = result.stdout.decode(errors="replace").strip()
         raise GitError(stderr or stdout or "git unpack-objects failed")
+
+
+def import_bundle(repo_path: Path, bundle_path: Path, source_ref: str, destination_ref: str) -> None:
+    run_git(repo_path, "fetch", str(bundle_path), f"{source_ref}:{destination_ref}")
 
 
 def object_exists(repo_path: Path, object_id: str, kind: str | None = None) -> bool:

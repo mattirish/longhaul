@@ -7,8 +7,21 @@ export PYTHONPATH
 
 WORKDIR="${LONGHAUL_LOOPBACK_WORKDIR:-$(mktemp -d /tmp/longhaul-loopback.XXXXXX)}"
 HOST="${FREEDATA_HOST:-127.0.0.1}"
-CMD_PORT="${FREEDATA_CMD_PORT:-9100}"
-DATA_PORT="${FREEDATA_DATA_PORT:-9101}"
+if [[ -n "${FREEDATA_CMD_PORT:-}" ]]; then
+  CMD_PORT="${FREEDATA_CMD_PORT}"
+else
+  CMD_PORT="$((20000 + (RANDOM % 10000)))"
+fi
+if [[ -n "${FREEDATA_DATA_PORT:-}" ]]; then
+  DATA_PORT="${FREEDATA_DATA_PORT}"
+else
+  DATA_PORT="$((CMD_PORT + 1))"
+fi
+if [[ -n "${FREEDATA_API_PORT:-}" ]]; then
+  API_PORT="${FREEDATA_API_PORT}"
+else
+  API_PORT="$((DATA_PORT + 1))"
+fi
 SEGMENT_SIZE="${LONGHAUL_SEGMENT_SIZE:-32}"
 INBOX="${FREEDATA_LOOPBACK_INBOX:-/tmp/freedata_socket_inbox}"
 DAEMON_LOG="${WORKDIR}/freedata.log"
@@ -24,7 +37,8 @@ trap cleanup EXIT
 rm -rf "${INBOX}"
 mkdir -p "${INBOX}"
 
-"${ROOT}/scripts/start-freedata-local.sh" >"${WORKDIR}/freedata-config-path.txt" 2>"${DAEMON_LOG}" &
+env FREEDATA_API_PORT="${API_PORT}" FREEDATA_CMD_PORT="${CMD_PORT}" FREEDATA_DATA_PORT="${DATA_PORT}" \
+  "${ROOT}/scripts/start-freedata-local.sh" >"${WORKDIR}/freedata-config-path.txt" 2>"${DAEMON_LOG}" &
 DAEMON_PID=$!
 
 for _ in $(seq 1 30); do

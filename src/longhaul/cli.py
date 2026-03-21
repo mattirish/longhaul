@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict
 import json
+import time
 import sys
 from pathlib import Path
 
@@ -361,12 +362,33 @@ def transport_loopback_import_command(args: argparse.Namespace) -> int:
     inbox = Path(args.inbox).resolve()
     if not inbox.exists():
         raise FileNotFoundError(f"loopback inbox does not exist: {inbox}")
-    candidates = [path for path in inbox.iterdir() if path.is_file()]
-    if not candidates:
+    source = None
+    last_error: Exception | None = None
+    for _ in range(20):
+        candidates = sorted(
+            (path for path in inbox.iterdir() if path.is_file()),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+        if not candidates:
+            time.sleep(0.1)
+            continue
+        for candidate in candidates:
+            try:
+                read_envelope(candidate)
+                source = candidate
+                break
+            except (ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+        if source is not None:
+            break
+        time.sleep(0.1)
+    if source is None:
+        if last_error is not None:
+            raise ValueError(f"no readable loopback messages found in {inbox}: {last_error}")
         raise FileNotFoundError(f"no loopback messages found in {inbox}")
-    source = max(candidates, key=lambda path: path.stat().st_mtime_ns)
-    read_envelope(source)
     destination = import_message(Path(args.spool).resolve(), source)
+    source.unlink(missing_ok=True)
     print(json.dumps({"source_path": str(source), "spool_path": str(destination)}, indent=2))
     return 0
 

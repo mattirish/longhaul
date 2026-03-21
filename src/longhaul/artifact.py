@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from itertools import groupby
 from pathlib import Path
 
-from .git import canonical_ref, object_closure, object_exists, pack_objects, rev_parse, rev_parse_optional, unpack_objects, update_ref
+from .git import canonical_ref, create_bundle, import_bundle, object_closure, object_exists, rev_parse, rev_parse_optional, update_ref
 from .metadata import (
     ReceiveArtifactState,
     artifact_incoming_dir,
@@ -168,8 +168,8 @@ def plan_artifact(
     artifact_id = str(uuid.uuid4())
     artifact_dir = output_dir / artifact_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    payload_path = artifact_dir / "payload.pack"
-    pack_objects(repo_path, object_ids, payload_path)
+    payload_path = artifact_dir / "payload.bundle"
+    create_bundle(repo_path, payload_path, resolved_target_ref, baseline_commit)
 
     segments = segment_manifest(payload_path, segment_size)
     payload_size = payload_path.stat().st_size
@@ -419,7 +419,8 @@ def apply_artifact(repo_path: Path, artifact_dir: Path, *, expected_repo_id: str
 
     payload_path = payload_path_for_manifest(artifact_dir, manifest)
     if manifest.payload_size > 0:
-        unpack_objects(repo_path, payload_path)
+        import_ref = f"refs/longhaul/imports/{manifest.artifact_id}"
+        import_bundle(repo_path, payload_path, manifest.target_ref, import_ref)
 
     if not object_exists(repo_path, manifest.target_commit, "commit"):
         raise ValueError("target commit is not present after artifact import")

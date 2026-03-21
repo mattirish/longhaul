@@ -120,7 +120,7 @@ python3 -m longhaul.cli plan artifact \
 
 ARTIFACT_DIR="$(find "${ARTIFACT_ROOT}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 MANIFEST_PATH="${ARTIFACT_DIR}/manifest.json"
-PAYLOAD_PATH="${ARTIFACT_DIR}/payload.pack"
+PAYLOAD_PATH="${ARTIFACT_DIR}/payload.bundle"
 
 python3 -m longhaul.cli send offer --manifest "${MANIFEST_PATH}" --message "${WORKDIR}/offer.lhm" >/dev/null
 
@@ -158,7 +158,7 @@ def airtime(byte_count: int) -> float:
 changed_paths = [line for line in (workdir / "changed-paths.txt").read_text().splitlines() if line]
 changed_tar = workdir / "changed-files.tar.gz"
 bundle = workdir / "update.bundle"
-payload = next((workdir / "artifact").glob("*/payload.pack"))
+payload = next((workdir / "artifact").glob("*/payload.bundle"))
 
 metrics = {
     "profile": "default",
@@ -176,7 +176,7 @@ metrics = {
             "bytes": size(bundle),
             "estimated_airtime_seconds": airtime(size(bundle)),
         },
-        "longhaul_payload_pack": {
+        "longhaul_payload_bundle": {
             "bytes": size(payload),
             "estimated_airtime_seconds": airtime(size(payload)),
         },
