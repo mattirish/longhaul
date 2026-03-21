@@ -159,3 +159,9 @@ The next meaningful integration steps are:
 - determine whether FreeDATA test mode can be extended to simulate a full peer session instead of only looping back the data socket payload
 - formalize the local loop harness into a repeatable integration test script
 - validate Longhaul transfer over a real modem-backed FreeDATA session once the daemon bootstrap is stable
+
+For before/after sizing work that does not require the live daemon, use [scripts/run-reference-case.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-reference-case.sh). It generates a deterministic sender/receiver fixture and prints comparative byte counts and estimated airtime for:
+
+- naive `tar.gz` of changed files
+- `git bundle` from baseline to target
+- Longhaul planned payload and protocol messages

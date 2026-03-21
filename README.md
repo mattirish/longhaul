@@ -93,6 +93,7 @@ Longhaul now has:
 The FreeDATA adapter is intentionally early. It mirrors all emitted messages locally and targets the daemon socket interface, but it has not yet been validated against a live on-air session in this repository.
 The vendored FreeDATA submodule now also carries a small `enable_testmode` patch to make local socket-interface development possible without a live modem/audio path.
 The repository now includes a repeatable local loop harness at [scripts/run-freedata-loopback.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-freedata-loopback.sh) that drives a full sender-to-receiver artifact transfer through the live local FreeDATA daemon in test mode.
+The repository also includes a first reference-case generator at [scripts/run-reference-case.sh](/Users/mattirish_1/projects/ham/rfsync/scripts/run-reference-case.sh) for comparing naive changed-file archives, `git bundle`, and Longhaul payload sizes against the same baseline-to-target update.
 
 ## Non-Goals For V1
 
@@ -108,3 +109,4 @@ The repository now includes a repeatable local loop harness at [scripts/run-free
 - [ARCHITECTURE.md](/Users/mattirish_1/projects/ham/rfsync/ARCHITECTURE.md)
 - [PROTOCOL.md](/Users/mattirish_1/projects/ham/rfsync/PROTOCOL.md)
 - [FREEDATA_INTEGRATION.md](/Users/mattirish_1/projects/ham/rfsync/FREEDATA_INTEGRATION.md)
+- [REFERENCE_CASE.md](/Users/mattirish_1/projects/ham/rfsync/REFERENCE_CASE.md)

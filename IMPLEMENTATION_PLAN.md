@@ -115,6 +115,21 @@ Acceptance criteria:
 - the harness proves receiver convergence to the planned target commit
 - the harness is suitable as the baseline for future reference-case testing
 
+## Phase 8: Reference-Case Benchmark
+
+Deliverables:
+
+- deterministic fixture generator for a known baseline-to-target repository update
+- comparative outputs for naive changed-file archive, `git bundle`, and Longhaul artifact sizing
+- configurable segment size and simulated link rate inputs
+- machine-readable metrics output suitable for publishing benchmark tables
+
+Acceptance criteria:
+
+- one command produces repeatable before/after transfer metrics
+- the scenario uses the same sender and receiver baseline across all compared methods
+- the output is simple enough to reuse in documentation and future benchmark automation
+
 ## Data Model Sketch
 
 Repository-local metadata:
