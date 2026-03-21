@@ -356,6 +356,20 @@ def transport_dispatch_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def transport_loopback_import_command(args: argparse.Namespace) -> int:
+    inbox = Path(args.inbox).resolve()
+    if not inbox.exists():
+        raise FileNotFoundError(f"loopback inbox does not exist: {inbox}")
+    candidates = [path for path in inbox.iterdir() if path.is_file()]
+    if not candidates:
+        raise FileNotFoundError(f"no loopback messages found in {inbox}")
+    source = max(candidates, key=lambda path: path.stat().st_mtime_ns)
+    read_envelope(source)
+    destination = import_message(Path(args.spool).resolve(), source)
+    print(json.dumps({"source_path": str(source), "spool_path": str(destination)}, indent=2))
+    return 0
+
+
 def send_segment_command(args: argparse.Namespace) -> int:
     output_path = export_segment(
         Path(args.artifact_dir).resolve(),
@@ -615,6 +629,11 @@ def build_parser() -> argparse.ArgumentParser:
     transport_dispatch_parser.add_argument("--bandwidth", type=int, default=2300)
     transport_dispatch_parser.add_argument("--session-mode", choices=["auto", "data-only"], default="auto")
     transport_dispatch_parser.set_defaults(func=transport_dispatch_command)
+
+    transport_loopback_parser = transport_subparsers.add_parser("loopback-import")
+    transport_loopback_parser.add_argument("--inbox", required=True)
+    transport_loopback_parser.add_argument("--spool", required=True)
+    transport_loopback_parser.set_defaults(func=transport_loopback_import_command)
 
     return parser
 

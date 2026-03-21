@@ -35,6 +35,9 @@ The following was validated locally in this repository:
 - `longhaul transport probe --transport freedata ...` successfully reaches the real command socket and receives `VERSION FREEDATA`
 - `longhaul transport dispatch --transport freedata ...` successfully sends a Longhaul envelope through the real FreeDATA command/data socket path
 - FreeDATA logs show the exact Longhaul JSON envelope arriving on the data socket
+- in FreeDATA test mode, the data socket now writes one complete payload per connection into a local loopback inbox
+- `longhaul transport loopback-import ...` can ingest those loopback payloads into a Longhaul spool as normal `OFFER` and `SEGMENT` envelopes
+- a full local multi-segment loop now works end-to-end: sender plans an artifact, dispatches `OFFER` plus `SEGMENT` messages through the live FreeDATA daemon in `data-only` mode, receiver stages and assembles the artifact, verifies it, and advances to the target commit
 
 ## Current Blocker
 
@@ -125,10 +128,18 @@ PYTHONPATH=src python3 -m longhaul.cli transport dispatch \
   --session-mode data-only
 ```
 
+4. Import the looped-back payload into a receiver spool:
+
+```bash
+PYTHONPATH=src python3 -m longhaul.cli transport loopback-import \
+  --inbox /tmp/freedata_socket_inbox \
+  --spool /tmp/longhaul-receiver-spool
+```
+
 ## Next Work
 
 The next meaningful integration steps are:
 
-- reduce command-socket response races by deciding whether Longhaul should keep a longer-lived FreeDATA command session or support an externally managed session mode
-- determine whether FreeDATA test mode can be extended to complete a local peer session without live RF
+- determine whether FreeDATA test mode can be extended to simulate a full peer session instead of only looping back the data socket payload
+- formalize the local loop harness into a repeatable integration test script
 - validate Longhaul transfer over a real modem-backed FreeDATA session once the daemon bootstrap is stable

@@ -58,9 +58,11 @@ class SpoolAdapter:
 
     def ingest(self, path: Path) -> Path:
         self.ensure()
-        destination = self.incoming_dir / path.name
-        shutil.copyfile(path, destination)
-        return destination
+        envelope = read_envelope(path)
+        return write_envelope(
+            self.incoming_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            envelope,
+        )
 
     def list(self, box: str) -> list[Path]:
         self.ensure()
@@ -157,9 +159,11 @@ class FreeDataAdapter:
 
     def ingest(self, path: Path) -> Path:
         self.ensure()
-        destination = self.mirror.incoming_dir / path.name
-        shutil.copyfile(path, destination)
-        return destination
+        envelope = read_envelope(path)
+        return write_envelope(
+            self.mirror.incoming_dir / f"{envelope.message_id}-{envelope.message_type}.json",
+            envelope,
+        )
 
     def list(self, box: str) -> list[Path]:
         self.ensure()
